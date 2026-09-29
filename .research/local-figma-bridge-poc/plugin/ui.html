@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local Codex Figma Bridge POC</title>
+    <style>
+      :root { color-scheme: light; font: 12px/1.45 Inter, system-ui, sans-serif; }
+      body { margin: 0; padding: 12px 14px; color: #202633; background: #f8f9fb; }
+      .row { display: flex; align-items: center; gap: 8px; }
+      #dot { width: 8px; height: 8px; border-radius: 50%; background: #d89b25; }
+      #status { font-weight: 600; }
+      #details { margin-top: 5px; color: #5c6574; overflow-wrap: anywhere; }
+      #url { margin-top: 7px; color: #788292; font-size: 10px; }
+      #pairing-panel { margin-top: 9px; padding-top: 8px; border-top: 1px solid #e1e5ec; }
+      #pairing-label { display: block; margin-bottom: 4px; color: #5c6574; }
+      #pairing-row { display: flex; gap: 6px; }
+      #pairing-code { box-sizing: border-box; min-width: 0; flex: 1; padding: 6px 7px; border: 1px solid #cbd2dc; border-radius: 5px; font: inherit; }
+      #pairing-button { padding: 6px 9px; border: 0; border-radius: 5px; color: #fff; background: #315fce; font: inherit; }
+      #pairing-button:disabled { opacity: .55; }
+      #pairing-help { margin-top: 4px; color: #788292; font-size: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="row"><span id="dot"></span><span id="status">Connecting to local Codex…</span></div>
+    <div id="details">Waiting for the loopback MCP server.</div>
+    <div id="pairing-panel">
+      <label id="pairing-label" for="pairing-code">One-time code from figma_pairing_begin</label>
+      <div id="pairing-row">
+        <input id="pairing-code" type="password" inputmode="text" autocomplete="off" spellcheck="false" maxlength="80" aria-label="One-time pairing code" />
+        <button id="pairing-button" type="button">Pair</button>
+      </div>
+      <div id="pairing-help">Pairing enables scoped writes for this local Figma client.</div>
+    </div>
+    <div id="url">ws://localhost:41731 → 127.0.0.1 · no REST / no token</div>
+    <script>
+      // BEGIN EMBEDDED HMAC BUNDLE
+      (()=>{var W=Object.defineProperty;var X=(e,t,n)=>t in e?W(e,t,{enumerable:!0,configurable:!0,writable:!0,value:n}):e[t]=n;var c=(e,t,n)=>X(e,typeof t!="symbol"?t+"":t,n);function O(e){return e instanceof Uint8Array||ArrayBuffer.isView(e)&&e.constructor.name==="Uint8Array"&&"BYTES_PER_ELEMENT"in e&&e.BYTES_PER_ELEMENT===1}var U=e=>e?`"${e}" `:"";function S(e,t=""){if(typeof e!="number")throw new TypeError(U(t)+"expected number, got "+typeof e);if(!Number.isSafeInteger(e)||e<0)throw new RangeError(U(t)+"expected integer >= 0, got "+e);return e}function w(e,t,n=""){if(O(e)&&(t===void 0||e.length===t))return e;t!==void 0&&S(t,"length");let o=O(e),r=t!==void 0?` of length ${t}`:"",s=o?`length=${e.length}`:`type=${typeof e}`,i=U(n)+"expected Uint8Array"+r+", got "+s;throw o?new RangeError(i):new TypeError(i)}function D(e){if(typeof e!="function"||typeof e.create!="function")throw new TypeError("expected hash wrapped by utils.createHasher");if(S(e.outputLen),S(e.blockLen),e.outputLen<1||e.blockLen<1)throw new Error("hash blockLen / outputLen must be >= 1")}var K=(e,t)=>{if(e===null||typeof e!="object"||Array.isArray(e))throw new TypeError((t==="object"?"":`"${t}" `)+"expected object, got type="+typeof e)},C=(e,t)=>{K(e,t);let n=Object.getPrototypeOf(e);if(n!==Object.prototype&&n!==null)throw new TypeError(`"${t}" expected plain object`);if(Object.hasOwn(e,"__proto__"))throw new TypeError(`"${t}.__proto__" is not allowed`)};function y(e,t=!0){if(e.destroyed)throw new Error("hash was destroyed");if(t&&e.finished)throw new Error("digest() was already called")}function m(e,t){w(e,void 0,"output");let n=t.outputLen;if(!(e.length>=n))throw new RangeError('"output" expected length >= '+n)}function H(...e){for(let t=0;t<e.length;t++)e[t].fill(0)}function A(e){return new DataView(e.buffer,e.byteOffset,e.byteLength)}function d(e,t){return e<<32-t|e>>>t}function P(e,t,n="opts"){return C(e,"defaults"),t!==void 0&&C(t,n),Object.assign(Object.create(null),e,t)}function j(e,t={}){if(typeof e!="function")throw new TypeError('"hashCons" expected function, got type='+typeof e);t=P({},t,"info");let n=(r,s)=>e(s).update(r).digest(),o=e(void 0);return n.outputLen=o.outputLen,n.blockLen=o.blockLen,n.canXOF=o.canXOF,n.create=r=>e(r),Object.assign(n,t),Object.freeze(n)}var k=e=>({oid:Uint8Array.from([6,9,96,134,72,1,101,3,4,2,e])});var L=class{constructor(t,n){c(this,"oHash");c(this,"iHash");c(this,"blockLen");c(this,"outputLen");c(this,"canXOF",!1);c(this,"finished",!1);c(this,"destroyed",!1);if(D(t),w(n,void 0,"key"),this.iHash=t.create(),typeof this.iHash.update!="function")throw new Error("expected Hash instance");this.blockLen=this.iHash.blockLen,this.outputLen=this.iHash.outputLen;let o=this.blockLen,r=new Uint8Array(o);r.set(n.length>o?t.create().update(n).digest():n);for(let s=0;s<r.length;s++)r[s]^=54;this.iHash.update(r),this.oHash=t.create();for(let s=0;s<r.length;s++)r[s]^=106;this.oHash.update(r),H(r)}update(t){return y(this),this.iHash.update(t),this}digestInto(t){y(this),m(t,this),this.finished=!0;let n=t.subarray(0,this.outputLen);this.iHash.digestInto(n),this.oHash.update(n),this.oHash.digestInto(n),this.destroy()}digest(){let t=new Uint8Array(this.oHash.outputLen);return this.digestInto(t),t}_cloneInto(t){t||(t=Object.create(Object.getPrototypeOf(this),{}));let{oHash:n,iHash:o,finished:r,destroyed:s,blockLen:i,outputLen:a,canXOF:f}=this;return t=t,t.finished=r,t.destroyed=s,t.blockLen=i,t.outputLen=a,t.canXOF=f,t.oHash=n._cloneInto(t.oHash),t.iHash=o._cloneInto(t.iHash),t}clone(){return this._cloneInto()}destroy(){this.destroyed=!0,this.oHash.destroy(),this.iHash.destroy()}},G=(()=>{let e=((t,n,o)=>new L(t,n).update(o).digest());return e.create=(t,n)=>new L(t,n),e})();var J=e=>e/2**32|0,Y=e=>e>>>0;function I(e,t,n,o){let r=J(n),s=Y(n);e.setUint32(t,o?s:r,o),e.setUint32(t+4,o?r:s,o)}function $(e,t,n){return e&t^~e&n}function M(e,t,n){return e&t^e&n^t&n}var E=class{constructor(t,n,o,r){c(this,"blockLen");c(this,"outputLen");c(this,"canXOF",!1);c(this,"padOffset");c(this,"isLE");c(this,"buffer");c(this,"view");c(this,"finished",!1);c(this,"length",0);c(this,"pos",0);c(this,"destroyed",!1);this.blockLen=t,this.outputLen=n,this.padOffset=o,this.isLE=r,this.buffer=new Uint8Array(t),this.view=A(this.buffer)}update(t){y(this),w(t);let{view:n,buffer:o,blockLen:r}=this,s=t.length,i=!1;for(let a=0;a<s;){let f=Math.min(r-this.pos,s-a);if(f===r){let x=A(t);for(;r<=s-a;a+=r)this.process(x,a);i=!0;continue}o.set(a===0&&f===s?t:t.subarray(a,a+f),this.pos),this.pos+=f,a+=f,this.pos===r&&(this.process(n,0),this.pos=0,i=!0)}return this.length+=t.length,i&&this.roundClean(),this}digestInto(t){y(this),m(t,this),this.finished=!0;let{buffer:n,view:o,blockLen:r,isLE:s}=this,{pos:i}=this;n[i++]=128,n.fill(0,i),this.padOffset>r-i&&(this.process(o,0),n.fill(0)),I(o,r-8,this.length*8,s),this.process(o,0),this.roundClean();let a=t===n?o:A(t),f=this.outputLen,x=f/4,b=this.get();if(f%4||x>b.length)throw new Error("invalid outputLen");for(let u=0;u<x;u++)a.setUint32(4*u,b[u],s)}digest(){let{buffer:t,outputLen:n}=this;this.digestInto(t);let o=t.slice(0,n);return this.destroy(),o}_cloneIntoMeta(t){let{buffer:n,length:o,finished:r,destroyed:s,pos:i}=this;return t.destroyed=s,t.finished=r,t.length=o,t.pos=i,i&&t.buffer.set(n),t}clone(){return this._cloneInto()}},R=Uint32Array.from([1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541459225]);var z=Uint32Array.from([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]),l=new Uint32Array(64),_=class extends E{constructor(n,o){super(64,n,8,!1);c(this,"A",0);c(this,"B",0);c(this,"C",0);c(this,"D",0);c(this,"E",0);c(this,"F",0);c(this,"G",0);c(this,"H",0);this.A=o[0]|0,this.B=o[1]|0,this.C=o[2]|0,this.D=o[3]|0,this.E=o[4]|0,this.F=o[5]|0,this.G=o[6]|0,this.H=o[7]|0}get(){let{A:n,B:o,C:r,D:s,E:i,F:a,G:f,H:x}=this;return[n,o,r,s,i,a,f,x]}set(n,o,r,s,i,a,f,x){this.A=n|0,this.B=o|0,this.C=r|0,this.D=s|0,this.E=i|0,this.F=a|0,this.G=f|0,this.H=x|0}_cloneInto(n){return(n||(n=new this.constructor)).set(...this.get()),this._cloneIntoMeta(n)}process(n,o){for(let h=0;h<16;h++,o+=4)l[h]=n.getUint32(o,!1);for(let h=16;h<64;h++){let g=l[h-15],p=l[h-2],F=d(g,7)^d(g,18)^g>>>3,B=d(p,17)^d(p,19)^p>>>10;l[h]=B+l[h-7]+F+l[h-16]|0}let{A:r,B:s,C:i,D:a,E:f,F:x,G:b,H:u}=this;for(let h=0;h<64;h++){let g=d(f,6)^d(f,11)^d(f,25),p=u+g+$(f,x,b)+z[h]+l[h]|0,B=(d(r,2)^d(r,13)^d(r,22))+M(r,s,i)|0;u=b,b=x,x=f,f=a+p|0,a=i,i=s,s=r,r=p+B|0}r=r+this.A|0,s=s+this.B|0,i=i+this.C|0,a=a+this.D|0,f=f+this.E|0,x=x+this.F|0,b=b+this.G|0,u=u+this.H|0,this.set(r,s,i,a,f,x,b,u)}roundClean(){H(l)}destroy(){this.destroyed=!0,this.set(0,0,0,0,0,0,0,0),H(this.buffer)}},T=class extends _{constructor(){super(32,R)}};var N=j(()=>new T,k(1));globalThis.localBridgeHmacSha256=(e,t)=>G(N,e,t);})();
+      // END EMBEDDED HMAC BUNDLE
+      const WS_URL = "ws://localhost:41731";
+      const WORKSPACE_ID = "protype-code-local";
+      const TASK_ID = "local-figma-bridge-poc";
+      const PROTOCOL_VERSION = "1";
+      const ALLOWED_COMMANDS = new Set([
+        "status", "read_document", "create_poc", "create_text", "set_layout",
+        "update_poc", "create_prototype_sample", "export_poc", "delete_poc_owned",
+        "scope_read_node", "scope_create_frame", "scope_update_frame",
+        "scope_delete_node", "scope_set_prototype",
+        "scope_create_foreign_fixture", "scope_delete_foreign_fixture",
+      ]);
+      const statusEl = document.getElementById("status");
+      const detailsEl = document.getElementById("details");
+      const dotEl = document.getElementById("dot");
+      const pairingPanel = document.getElementById("pairing-panel");
+      const pairingCodeEl = document.getElementById("pairing-code");
+      const pairingButton = document.getElementById("pairing-button");
+      let socket = null;
+      let reconnectTimer = null;
+      let heartbeatTimer = null;
+      let session = null;
+      let connectionId = null;
+      let ready = false;
+      let authenticated = false;
+      let serverId = null;
+      let authProofContext = null;
+      let pendingPairingRecord = null;
+      const uiPending = new Map();
+
+      function setStatus(text, color, details) {
+        statusEl.textContent = text;
+        dotEl.style.background = color;
+        if (details !== undefined) detailsEl.textContent = details;
+      }
+
+      function postToMain(pluginMessage) {
+        parent.postMessage({ pluginMessage }, "*");
+      }
+
+      function stopTimers() {
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        reconnectTimer = null;
+        heartbeatTimer = null;
+      }
+
+      function closePending() {
+        uiPending.clear();
+      }
+
+      function updatePairingPanel() {
+        pairingPanel.hidden = authenticated;
+        pairingButton.disabled = !ready || authenticated || !socket || socket.readyState !== WebSocket.OPEN;
+      }
+
+      function decodeBase64Url(value) {
+        const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
+        return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+      }
+
+      function encodeBase64Url(value) {
+        let binary = "";
+        for (const byte of new Uint8Array(value)) binary += String.fromCharCode(byte);
+        return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      }
+
+      function pairingPayload(fields, role) {
+        return [fields.protocolVersion, fields.serverId, fields.clientId, fields.pairingId, fields.nonce, role].join("\n");
+      }
+
+      async function pairingProof(secret, fields, role) {
+        const keyBytes = decodeBase64Url(secret);
+        const payloadBytes = new TextEncoder().encode(pairingPayload(fields, role));
+        if (globalThis.crypto?.subtle) {
+          const key = await crypto.subtle.importKey("raw", keyBytes,
+            { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+          return encodeBase64Url(await crypto.subtle.sign("HMAC", key, payloadBytes));
+        }
+        if (typeof globalThis.localBridgeHmacSha256 !== "function") {
+          throw new Error("Bundled HMAC is unavailable in the Figma plugin UI.");
+        }
+        return encodeBase64Url(globalThis.localBridgeHmacSha256(keyBytes, payloadBytes));
+      }
+
+      function sameProof(left, right) {
+        if (typeof left !== "string" || typeof right !== "string" || left.length !== right.length) return false;
+        let mismatch = 0;
+        for (let index = 0; index < left.length; index += 1) mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+        return mismatch === 0;
+      }
+
+      async function handleAuthChallenge(message) {
+        const pairing = session?.pairingRecord;
+        if (!pairing || message.protocolVersion !== PROTOCOL_VERSION || message.serverId !== serverId ||
+            message.clientId !== session.clientId || message.serverId !== pairing.serverId ||
+            message.pairingId !== pairing.pairingId || typeof message.nonce !== "string") {
+          setStatus("Pairing required", "#d89b25", "The saved pairing does not match this local MCP server.");
+          updatePairingPanel();
+          return;
+        }
+        authProofContext = {
+          protocolVersion: message.protocolVersion,
+          serverId: message.serverId,
+          clientId: message.clientId,
+          pairingId: message.pairingId,
+          nonce: message.nonce,
+        };
+        try {
+          const proof = await pairingProof(pairing.secret, authProofContext, "client");
+          if (socket?.readyState !== WebSocket.OPEN) return;
+          socket.send(JSON.stringify({ type: "auth_proof", ...authProofContext, proof }));
+        } catch (error) {
+          setStatus("Pairing authentication failed", "#d64f45", error instanceof Error ? error.message : String(error));
+        }
+      }
+
+      function scheduleReconnect() {
+        if (reconnectTimer) return;
+        setStatus("Disconnected — retrying…", "#d89b25", "The MCP server is unavailable; retrying the same local socket.");
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, 1_500);
+      }
+
+      function connect() {
+        stopTimers();
+        ready = false;
+        authenticated = false;
+        connectionId = null;
+        authProofContext = null;
+        closePending("Local MCP connection closed");
+        postToMain({ type: "bridge-auth-reset" });
+        updatePairingPanel();
+        setStatus("Connecting to local Codex…", "#d89b25", "Waiting for the loopback MCP server.");
+        socket = new WebSocket(WS_URL);
+        socket.addEventListener("open", () => {
+          postToMain({ type: "bridge-initialize" });
+        });
+        socket.addEventListener("message", (event) => {
+          let message;
+          try { message = JSON.parse(event.data); } catch { return; }
+          if (message.type === "welcome") {
+            if (!session || message.workspaceId !== WORKSPACE_ID || message.taskId !== TASK_ID ||
+                message.sessionId !== session.sessionId || message.clientId !== session.clientId ||
+                message.fileIdentity !== session.fileIdentity) {
+              socket.close(1008, "Mismatched bridge session");
+              return;
+            }
+            serverId = message.serverId;
+            connectionId = message.connectionId;
+            postToMain({
+              type: "connection-ready",
+              workspaceId: WORKSPACE_ID,
+              taskId: TASK_ID,
+              sessionId: session.sessionId,
+              clientId: session.clientId,
+              fileIdentity: session.fileIdentity,
+              connectionId,
+            });
+            return;
+          }
+          if (message.type === "auth_challenge") {
+            void handleAuthChallenge(message);
+            return;
+          }
+          if (message.type === "auth_result") {
+            if (!message.authenticated || !authProofContext || message.serverId !== serverId ||
+                message.clientId !== session?.clientId || message.pairingId !== authProofContext.pairingId ||
+                message.nonce !== authProofContext.nonce) {
+              authenticated = false;
+              postToMain({ type: "bridge-auth-reset" });
+              setStatus("Connected · read only", "#d89b25", "Pairing authentication was rejected; writes remain disabled.");
+              updatePairingPanel();
+              return;
+            }
+            const pairing = session?.pairingRecord;
+            if (!pairing) return;
+            void pairingProof(pairing.secret, authProofContext, "server").then((expected) => {
+              if (!sameProof(expected, message.serverProof) || socket?.readyState !== WebSocket.OPEN) {
+                setStatus("Server authentication failed", "#d64f45", "The local bridge proof did not match the saved pairing.");
+                return;
+              }
+              socket.send(JSON.stringify({ type: "auth_confirm", serverId,
+                clientId: session.clientId, pairingId: authProofContext.pairingId,
+                nonce: authProofContext.nonce }));
+            }).catch((error) => {
+              setStatus("Pairing authentication failed", "#d64f45", error instanceof Error ? error.message : String(error));
+            });
+            return;
+          }
+          if (message.type === "auth_complete") {
+            if (!message.authenticated || !authProofContext || message.serverId !== serverId ||
+                message.clientId !== session?.clientId || message.pairingId !== authProofContext.pairingId ||
+                message.nonce !== authProofContext.nonce) return;
+            authenticated = true;
+            postToMain({ type: "bridge-authenticated", serverId, clientId: session.clientId,
+              pairingId: message.pairingId, connectionId });
+            setStatus("Paired and authenticated", "#23885b",
+              `${session.documentName} · ${session.currentPageName} · stable file identity`);
+            updatePairingPanel();
+            return;
+          }
+          if (message.type === "pairing_issued") {
+            if (message.serverId !== serverId || message.clientId !== session?.clientId ||
+                typeof message.pairingId !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(message.secret)) {
+              socket.send(JSON.stringify({ type: "pairing_storage_failed", clientId: session?.clientId }));
+              return;
+            }
+            pendingPairingRecord = { serverId: message.serverId, clientId: message.clientId,
+              pairingId: message.pairingId, secret: message.secret };
+            postToMain({ type: "pairing-persist", clientId: session.clientId,
+              pairingRecord: pendingPairingRecord });
+            setStatus("Saving pairing", "#d89b25", "Storing the local pairing record in Figma clientStorage.");
+            return;
+          }
+          if (message.type === "pairing_error") {
+            pairingButton.disabled = false;
+            setStatus("Pairing failed", "#d64f45", `Local bridge rejected the pairing request (${message.code || "unknown"}).`);
+            return;
+          }
+          if (message.type === "pairing_stored_ack") return;
+          if (message.type === "request") {
+            if (!ready || (!authenticated && !["status", "read_document"].includes(message.command)) || !ALLOWED_COMMANDS.has(message.command) ||
+                message.workspaceId !== WORKSPACE_ID || message.taskId !== TASK_ID ||
+                message.connectionId !== connectionId || message.sessionId !== session?.sessionId ||
+                message.fileIdentity !== session?.fileIdentity || typeof message.requestId !== "string") {
+              return;
+            }
+            postToMain({
+              type: "plugin-command",
+              workspaceId: message.workspaceId,
+              taskId: message.taskId,
+              sessionId: message.sessionId,
+              fileIdentity: message.fileIdentity,
+              connectionId: message.connectionId,
+              requestId: message.requestId,
+              operationId: message.operationId,
+              authorizationId: message.authorizationId,
+              revision: message.revision,
+              trustedScope: message.trustedScope,
+              trustedOwnership: message.trustedOwnership,
+              testFixture: message.testFixture,
+              command: message.command,
+              expectedFileIdentity: message.payload?.expectedFileIdentity,
+              payload: message.payload,
+            });
+            uiPending.set(message.requestId, {
+              connectionId,
+              sessionId: session.sessionId,
+              fileIdentity: session.fileIdentity,
+              operationId: message.operationId,
+            });
+            return;
+          }
+          if (message.type === "heartbeat_ack" && message.connectionId === connectionId) return;
+        });
+        socket.addEventListener("close", () => {
+          ready = false;
+          authenticated = false;
+          stopTimers();
+          closePending("Local MCP connection closed");
+          postToMain({ type: "bridge-auth-reset" });
+          updatePairingPanel();
+          scheduleReconnect();
+        });
+        socket.addEventListener("error", () => {
+          setStatus("Socket error — retrying…", "#d64f45", "Check that the project MCP server is running on 127.0.0.1:41731.");
+        });
+      }
+
+      function bytesToBase64(bytes) {
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let index = 0; index < bytes.length; index += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+        }
+        return btoa(binary);
+      }
+
+      window.onmessage = (event) => {
+        const message = event.data && event.data.pluginMessage;
+        if (!message) return;
+        if (message.type === "bridge-hello") {
+          session = message;
+          if (!socket || socket.readyState !== WebSocket.OPEN) return;
+          socket.send(JSON.stringify({
+            type: "hello",
+            protocolVersion: PROTOCOL_VERSION,
+            workspaceId: WORKSPACE_ID,
+            taskId: TASK_ID,
+            sessionId: session.sessionId,
+            clientId: session.clientId,
+            ...(session.pairingRecord ? {
+              serverId: session.pairingRecord.serverId,
+              pairingId: session.pairingRecord.pairingId,
+            } : {}),
+            metadata: {
+              fileIdentity: session.fileIdentity,
+              fileIdentityQuality: session.fileIdentityQuality,
+              documentName: session.documentName,
+              currentPageId: session.currentPageId,
+              currentPageName: session.currentPageName,
+            },
+          }));
+          return;
+        }
+        if (message.type === "bridge-initialize-error") {
+          setStatus("Plugin initialization failed", "#d64f45", message.error || "Figma clientStorage could not be loaded.");
+          return;
+        }
+        if (message.type === "plugin-ready") {
+          if (message.connectionId !== connectionId || message.sessionId !== session?.sessionId ||
+              message.clientId !== session?.clientId) return;
+          ready = true;
+          socket.send(JSON.stringify({
+            type: "ready",
+            workspaceId: WORKSPACE_ID,
+            taskId: TASK_ID,
+            sessionId: session.sessionId,
+            clientId: session.clientId,
+            fileIdentity: session.fileIdentity,
+            connectionId,
+          }));
+          setStatus("Connected · read only", "#23885b",
+            `${session.documentName} · ${session.currentPageName} · ${session.fileIdentityQuality} file identity`);
+          updatePairingPanel();
+          heartbeatTimer = setInterval(() => {
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({ type: "heartbeat", connectionId, sessionId: session.sessionId }));
+            }
+          }, 10_000);
+          return;
+        }
+        if (message.type === "pairing-stored") {
+          if (!pendingPairingRecord || message.serverId !== pendingPairingRecord.serverId ||
+              message.clientId !== pendingPairingRecord.clientId || message.pairingId !== pendingPairingRecord.pairingId) return;
+          session.pairingRecord = pendingPairingRecord;
+          socket.send(JSON.stringify({ type: "pairing_stored", serverId: message.serverId,
+            clientId: message.clientId, pairingId: message.pairingId }));
+          pendingPairingRecord = null;
+          return;
+        }
+        if (message.type === "pairing-storage-error") {
+          if (socket?.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "pairing_storage_failed", clientId: message.clientId,
+              serverId: message.serverId, pairingId: message.pairingId }));
+          }
+          pendingPairingRecord = null;
+          setStatus("Pairing storage failed", "#d64f45", message.error || "Figma clientStorage write failed.");
+          updatePairingPanel();
+          return;
+        }
+        if (message.type === "plugin-result") {
+          const pending = uiPending.get(message.requestId);
+          if (!pending || pending.connectionId !== connectionId || pending.sessionId !== message.sessionId ||
+              pending.fileIdentity !== message.fileIdentity || pending.operationId !== message.operationId) return;
+          uiPending.delete(message.requestId);
+          if (message.ok && message.result?.bytes) {
+            try {
+              message.result.bytesBase64 = bytesToBase64(new Uint8Array(message.result.bytes));
+              delete message.result.bytes;
+            } catch (error) {
+              message.ok = false;
+              message.error = error instanceof Error ? error.message : String(error);
+            }
+          }
+          socket.send(JSON.stringify({
+            type: "result",
+            workspaceId: WORKSPACE_ID,
+            taskId: TASK_ID,
+            connectionId,
+            sessionId: pending.sessionId,
+            fileIdentity: pending.fileIdentity,
+            requestId: message.requestId,
+            ...(message.operationId ? { operationId: message.operationId } : {}),
+            ok: message.ok === true,
+            ...(message.ok ? { result: message.result } : { error: String(message.error || "Figma plugin error").slice(0, 1_000) }),
+          }));
+          return;
+        }
+      };
+
+      pairingButton.addEventListener("click", () => {
+        const code = pairingCodeEl.value.trim();
+        if (!code || !ready || !session || socket?.readyState !== WebSocket.OPEN) return;
+        pairingCodeEl.value = "";
+        pairingButton.disabled = true;
+        socket.send(JSON.stringify({ type: "pairing_code", clientId: session.clientId, code }));
+        setStatus("Pairing requested", "#d89b25", "The one-time code is being validated locally.");
+      });
+
+      connect();
+    </script>
+  </body>
+</html>

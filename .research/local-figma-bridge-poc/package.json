@@ -1,0 +1,24 @@
+{
+  "name": "local-figma-bridge-poc",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:plugin-ui": "node scripts/build-plugin-ui.mjs",
+    "pretest": "npm run build:plugin-ui",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "start": "node mcp/server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@noble/hashes": "2.4.0",
+    "ws": "8.18.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
