@@ -1,0 +1,24 @@
+# SHA-256 for the sanitized public evidence package and every included file.
+ec3919c59a296326dbdc1a709a9cf885b8f2fa92fd893e31010f7ded10e02820  docs/research/2026-09-28-local-figma-bridge-phase-8-0g2-evidence.zip
+b3d5d31cd25c34b000f2c2f981dab76eaeec04a4f409b318bd01fd8c823783a6  docs/roadmap/LOCAL_FIGMA_BRIDGE_DEVELOPMENT_BASELINE.md
+4c9325b12a591e7834f17924b60be821ddf06f9aea0dc79a5207c4133ece255c  docs/roadmap/local-figma-bridge-status.json
+2920b28e6967b11b28a2fa04ba0f7e6aea5518796f0c87f6e192a51e1713e7e5  docs/research/2026-09-24-local-figma-bridge-phase-8-0-hardening.md
+e466bb0f3a983466de7803b3eedc7dbf910d892dea2f4372961b0913dd1f876f  docs/research/2026-09-28-local-figma-bridge-phase-8-0g2-process-restart.md
+5b54650f860af33a2a19ba09fbd60f4dd08a5cbf815b81bb19fab9c9e7896b97  .research/local-figma-bridge-poc/README.md
+648564f1139db86bea19582034057cacce6b9bb5889d7c29649fb34668c69c03  .research/local-figma-bridge-poc/package.json
+e5a556678a9ee161e2a3d4ae4a5c7bc092268dc8c9d61330786cffdf29acab58  .research/local-figma-bridge-poc/package-lock.json
+19bceb0c4448fefaf47491d933c2a92dfe7015ba0e7b68a1ed58188ac4d6e17b  .research/local-figma-bridge-poc/mcp/server.mjs
+d5ba2347d49b81299b4fdd41342894850d2eec343eb9b383e5b09bda2c1a8fc2  .research/local-figma-bridge-poc/relay/bridge-server.mjs
+13af11be4e8f19d656f5237d0d41d6bd00516a8a524ec5983d8e037c77c3ce6b  .research/local-figma-bridge-poc/relay/mutation-audit.mjs
+09001e796ec69c91e236249d0a0b3c1216ddcf7d9ea9468de8bf63f0138ece3a  .research/local-figma-bridge-poc/relay/task-authorization-store.mjs
+1d4ecb1254ab00f8fcfd1b2f0e77ce627079b5bbd1f737313b4e9f12562d53c0  .research/local-figma-bridge-poc/relay/protocol.mjs
+a35c2750cacc40b4fd577fa3d296dae5477f4d1cf7062fd0e042d817d3bc48ce  .research/local-figma-bridge-poc/plugin/manifest.json
+c9036a56f519833304d89bbe7021b236ccb3b64764810e64a04f70ec61024dd5  .research/local-figma-bridge-poc/plugin/code.js
+858219d20bf7407daf73046bab54abe1d41caa3f74175f32dde4ec51d35b0081  .research/local-figma-bridge-poc/plugin/ui.html
+7dc672264bd530a3c74c313991dce5099931699fd9087b83005396f7c51b4175  .research/local-figma-bridge-poc/tests/protocol.test.mjs
+5e8f47d50b00f985e67900ae05486a0e1b3c8d5b28f2916b058941046c43c821  .research/local-figma-bridge-poc/tests/task-authorization-protocol.test.mjs
+a6be0846ab6bf45c7d15bd22a39f6b5c2a2e02540d0efc3569e652c572021feb  .research/local-figma-bridge-poc/tests/hardening-process-restart-live.mjs
+950a0ad24f65b84f9828d5cb3d17e209c5db2733e057b00f8d98ad4499fc1c5c  .research/local-figma-bridge-poc/tests/hardening-recover-owned-node.mjs
+1530b34515914bb7a421c5226d4e96411c774c62662f0abb32e151eaaf2af0ee  .research/local-figma-bridge-poc/tests/package-phase8-0g2.ps1
+5ced9586fb550880d4694e60e0bc438714135813dab476581553b93fd48966d9  docs/research/2026-09-28-local-figma-bridge-phase-8-0g2-evidence.sha256
+5ced9586fb550880d4694e60e0bc438714135813dab476581553b93fd48966d9  PACKAGE_MANIFEST.sha256
