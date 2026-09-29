@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844">
+<title>我的反馈 · A 连续回看清单 · 视觉候选</title>
+<desc>390×844 H5 玩家端模拟列表，三条合成记录，不表示业务真实状态。</desc>
+<rect id="page-background" width="390" height="844" fill="#F7F8FA"/>
+<g id="navigation">
+  <path id="back-chevron" d="M28 29 L20 37 L28 45" fill="none" stroke="#1F2329" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text id="page-title" x="195" y="43" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="20" font-weight="600" fill="#1F2329">我的反馈</text>
+</g>
+<g id="filters" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14">
+  <text x="48" y="106" text-anchor="middle" font-weight="600" fill="#147D73">全部</text>
+  <text x="147" y="106" text-anchor="middle" font-weight="400" fill="#6B7280">待处理</text>
+  <text x="243" y="106" text-anchor="middle" font-weight="400" fill="#6B7280">处理中</text>
+  <text x="342" y="106" text-anchor="middle" font-weight="400" fill="#6B7280">已关闭</text>
+  <path d="M24 121 H72" stroke="#147D73" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M0 132 H390" stroke="#E5E7EB" stroke-width="1"/>
+</g>
+<g id="record-001">
+  <text x="20" y="169" font-family="Arial, sans-serif" font-size="13" fill="#6B7280">DEMO-001</text>
+  <text x="370" y="169" text-anchor="end" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" font-weight="600" fill="#147D73">处理中</text>
+  <text x="20" y="199" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#1F2329">更新后页面内容未显示</text>
+  <path d="M365 185 L371 191 L365 197" fill="none" stroke="#9CA3AF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="20" y="224" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#6B7280">09-23 10:30 · 问题反馈</text>
+  <circle cx="25" cy="248" r="4" fill="#147D73"/>
+  <text x="36" y="253" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="500" fill="#147D73">新回复</text>
+  <path d="M20 273 H370" stroke="#E5E7EB" stroke-width="1"/>
+</g>
+<g id="record-002">
+  <text x="20" y="314" font-family="Arial, sans-serif" font-size="13" fill="#6B7280">DEMO-002</text>
+  <text x="370" y="314" text-anchor="end" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" font-weight="600" fill="#8A5B1B">待处理</text>
+  <text x="20" y="345" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#1F2329">如何查看最近的反馈记录</text>
+  <path d="M365 331 L371 337 L365 343" fill="none" stroke="#9CA3AF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="20" y="370" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#6B7280">09-22 16:20 · 使用咨询</text>
+  <path d="M20 398 H370" stroke="#E5E7EB" stroke-width="1"/>
+</g>
+<g id="record-003">
+  <text x="20" y="439" font-family="Arial, sans-serif" font-size="13" fill="#6B7280">DEMO-003</text>
+  <text x="370" y="439" text-anchor="end" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" font-weight="500" fill="#6B7280">已关闭</text>
+  <text x="20" y="470" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#1F2329">页面按钮点击后没有响应</text>
+  <path d="M365 456 L371 462 L365 468" fill="none" stroke="#9CA3AF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="20" y="495" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" fill="#6B7280">09-20 14:18 · 问题反馈</text>
+  <path d="M20 523 H370" stroke="#E5E7EB" stroke-width="1"/>
+</g>
+<g id="primary-action">
+  <rect x="18" y="758" width="354" height="48" rx="8" fill="#147D73"/>
+  <text x="195" y="788" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#FFFFFF">提交反馈</text>
+  <text x="195" y="830" text-anchor="middle" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="11" fill="#6B7280">视觉候选 · 模拟数据</text>
+</g>
+</svg>
