@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "operationId": "h5-player/my-feedback:iteration-1",
+  "scope": "h5-player/my-feedback",
+  "expectedFileIdentity": "<read-from-figma-status-in-the-current-plugin-session>",
+  "baseRevision": "<hash-of-owned-subtree-before-apply>",
+  "viewport": { "width": 375, "height": 812 },
+  "nodes": [
+    {
+      "key": "screen.root",
+      "type": "FRAME",
+      "name": "My feedback",
+      "layout": {
+        "mode": "VERTICAL",
+        "padding": { "top": 24, "right": 24, "bottom": 24, "left": 24 },
+        "itemSpacing": 16
+      },
+      "fills": [{ "type": "SOLID", "color": "#FFFFFF" }],
+      "componentReference": null,
+      "children": [
+        {
+          "key": "screen.title",
+          "type": "TEXT",
+          "text": "My feedback",
+          "typography": {
+            "fontFamily": "Inter",
+            "fontStyle": "Regular",
+            "fontSize": 20
+          },
+          "fills": [{ "type": "SOLID", "color": "#17202E" }],
+          "children": []
+        }
+      ]
+    }
+  ],
+  "reactions": [],
+  "metadata": {
+    "owner": "local-codex-figma-bridge-poc",
+    "taskId": "local-figma-bridge-poc"
+  }
+}

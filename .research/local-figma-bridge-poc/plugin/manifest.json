@@ -1,0 +1,14 @@
+{
+  "name": "Local Codex Figma Bridge POC",
+  "id": "local-codex-figma-bridge-poc",
+  "api": "1.0.0",
+  "enablePrivatePluginApi": true,
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "devAllowedDomains": ["ws://localhost:41731"]
+  }
+}
