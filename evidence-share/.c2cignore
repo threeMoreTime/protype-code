@@ -1,0 +1,3 @@
+# Deny all files except the explicitly reviewed smoke-test file.
+*
+!bridge-smoke-test.md
