@@ -1,0 +1,3 @@
+# Local third-party tools and bridge credentials must never be committed.
+/.tools/
+/.local/
