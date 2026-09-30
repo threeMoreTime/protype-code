@@ -60,7 +60,7 @@ C06 used the previously observed identity of the other dedicated file as the aut
 
 ### Cleanup error and read-only reconciliation
 
-The authorized cleanup command carried `operationId=op-sanitized-1` and transport request `runtime-id-omitted`. It returned `Unable to establish connection to Figma after 10 seconds. Please check your internet connection.` **OBSERVED failure**, not a successful delete response. The runner stopped without retrying. A fresh read-only MCP process initially observed plugin reconnect lag, then reauthenticated and read `ownedPocNodes: []` at `2026-09-28T02:1:900016.408Z`. This verifies the final absence of the test node; the precise timing and internal stage of the deletion remain **NOT VERIFIED**. Evidence: `本地运行记录（未纳入公开包）`. The live runner was subsequently updated so a future delete error triggers read-only reconciliation rather than a blind retry; it was not rerun to create another node.
+The authorized cleanup command carried `operationId=op-sanitized-1` and transport request `runtime-id-omitted`. It returned `Unable to establish connection to Figma after 10 seconds. Please check your internet connection.` **OBSERVED failure**, not a successful delete response. The runner stopped without retrying. A fresh read-only MCP process initially observed plugin reconnect lag, then reauthenticated and read `ownedPocNodes: []` at `2026-09-28T02:33:23.408Z`. This verifies the final absence of the test node; the precise timing and internal stage of the deletion remain **NOT VERIFIED**. Evidence: `本地运行记录（未纳入公开包）`. The live runner was subsequently updated so a future delete error triggers read-only reconciliation rather than a blind retry; it was not rerun to create another node.
 
 ## 5. Lifecycle, security, and remaining limits
 
