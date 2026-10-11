@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -9,6 +10,9 @@ import { startBridge } from "../relay/bridge-server.mjs";
 import { PairingStore } from "../relay/pairing-store.mjs";
 import { TaskAuthorizationStore } from "../relay/task-authorization-store.mjs";
 import { MutationAudit } from "../relay/mutation-audit.mjs";
+import { DESIGN_ACTIONS, designPayload } from "../design/commands.mjs";
+import { decodePng } from "../delivery/png.mjs";
+import { configuredDesignTimeout, designRequestTimeout } from "../design/request-timeout.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const POC_ROOT = path.resolve(HERE, "..");
@@ -57,6 +61,14 @@ export function decodePngBase64(base64) {
   return bytes;
 }
 
+export function validateDesignPng(result) {
+  const bytes = decodePngBase64(result?.bytesBase64);
+  const pixels = decodePng(bytes);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  if (result.sha256 !== sha256) throw new Error('DESIGN_PNG_HASH_MISMATCH');
+  return { bytes, sha256, pixelWidth: pixels.width, pixelHeight: pixels.height };
+}
+
 function jsonToolResult(value) {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
 }
@@ -95,10 +107,12 @@ function registerTool(server, bridge, name, description, command, { timeoutMs = 
 }
 
 export async function createMcpServer({ port = configuredPort(), stderr = process.stderr,
+  designTimeoutMs = configuredDesignTimeout(process.env.LOCAL_FIGMA_BRIDGE_DESIGN_TIMEOUT_MS),
   pairingStatePath = process.env.LOCAL_FIGMA_BRIDGE_PAIRING_STATE_PATH || DEFAULT_PAIRING_STATE_PATH,
   authorizationStatePath = process.env.LOCAL_FIGMA_BRIDGE_AUTHORIZATION_STATE_PATH || DEFAULT_AUTHORIZATION_STATE_PATH,
   auditPath = process.env.LOCAL_FIGMA_BRIDGE_AUDIT_PATH || DEFAULT_AUDIT_PATH,
   enableTestFixtures = process.env.LOCAL_FIGMA_BRIDGE_ENABLE_TEST_FIXTURES === "1" } = {}) {
+  designTimeoutMs = designRequestTimeout(designTimeoutMs);
   const pairingStore = new PairingStore({ filePath: path.resolve(pairingStatePath) });
   const authorizationStore = new TaskAuthorizationStore({ filePath: path.resolve(authorizationStatePath) });
   const auditJournal = new MutationAudit({ filePath: path.resolve(auditPath) });
@@ -108,10 +122,44 @@ export async function createMcpServer({ port = configuredPort(), stderr = proces
 
   const server = new McpServer(
     { name: "local-figma-bridge-poc", version: "0.0.1" },
-    { instructions: "Only operate on the isolated Codex Bridge POC page. Use the dedicated scoped tools; never issue arbitrary plugin code or delete unrelated nodes." },
+    { instructions: "Operate only in the explicitly allowlisted dedicated Figma file and locally authorized page/root scope. Use data-only DesignSpec tools; inspect unknown outcomes before another batch. Never issue arbitrary plugin code or modify unrelated nodes." },
   );
 
   registerTool(server, bridge, "figma_status", "Read the live Figma Desktop plugin, document, page, and session status.", "status", { annotations: { readOnlyHint: true } });
+  for (const command of Object.keys(DESIGN_ACTIONS)) {
+    server.registerTool(`figma_${command}`, {
+      description: `Scoped DesignSpec ${command.replace('scope_design_', '')}. Requires pairing, file allowlist, local authorization and a fresh operation ID. Never executes arbitrary JavaScript.`,
+      inputSchema: z.object({
+        ...WRITE_INPUT_SCHEMA, spec: z.record(z.unknown()), runId: z.string(),
+        batchSize: z.number().int().min(1).max(500).optional(),
+        timerUnit: z.enum(['seconds', 'milliseconds']).optional(),
+        allowGlobalResources: z.boolean().optional(), reconcile: z.boolean().optional(),
+        adoptNativeFlow: z.object({
+          pendingOperationId: z.string().regex(/^op-[A-Za-z0-9._-]{8,100}$/),
+          flowSnapshotSignature: z.string().regex(/^[a-f0-9]{64}$/),
+          reactionSnapshotSignature: z.string().regex(/^[a-f0-9]{64}$/),
+        }).strict().optional(),
+        nodeKey: z.string().optional(), scale: z.number().min(1).max(4).optional(),
+        auditOffset: z.number().int().min(0).max(25000).optional(),
+        auditLimit: z.number().int().min(1).max(2000).optional(),
+      }).strict(),
+      annotations: { readOnlyHint: command !== 'scope_design_apply', destructiveHint: false },
+    }, async (args) => {
+      try {
+        designPayload(command, args);
+        const result = await bridge.callPlugin(command, args, designTimeoutMs);
+        if (command === 'scope_design_export_png') {
+          const { bytes, sha256, pixelWidth, pixelHeight } = validateDesignPng(result);
+          const { bytesBase64, ...metadata } = result;
+          return { content: [
+            { type: 'text', text: JSON.stringify({ ...metadata, sha256, pixelWidth, pixelHeight }) },
+            { type: 'image', data: bytes.toString('base64'), mimeType: 'image/png' },
+          ] };
+        }
+        return jsonToolResult(result);
+      } catch (error) { return errorToolResult(error); }
+    });
+  }
   registerTool(server, bridge, "figma_read_document", "Read document metadata, pages, current page, and selection summary without using REST or screenshots.", "read_document", { annotations: { readOnlyHint: true } });
   server.registerTool("figma_scope_read_node", { description: "Read one node by ID for scope validation and read-back.",
     inputSchema: { targetNodeId: z.string() }, annotations: { readOnlyHint: true } }, async (args) => {

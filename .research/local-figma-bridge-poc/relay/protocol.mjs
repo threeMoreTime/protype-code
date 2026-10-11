@@ -20,6 +20,10 @@ export const COMMANDS = Object.freeze({
   SCOPE_SET_PROTOTYPE: "scope_set_prototype",
   SCOPE_CREATE_FOREIGN_FIXTURE: "scope_create_foreign_fixture",
   SCOPE_DELETE_FOREIGN_FIXTURE: "scope_delete_foreign_fixture",
+  SCOPE_DESIGN_PLAN: "scope_design_plan",
+  SCOPE_DESIGN_APPLY: "scope_design_apply",
+  SCOPE_DESIGN_AUDIT: "scope_design_audit",
+  SCOPE_DESIGN_EXPORT_PNG: "scope_design_export_png",
 });
 
 export const ALLOWED_COMMANDS = new Set(Object.values(COMMANDS));

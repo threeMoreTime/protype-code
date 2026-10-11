@@ -17,6 +17,8 @@ import {
 } from "./pairing-store.mjs";
 import { TaskAuthorizationStore } from "./task-authorization-store.mjs";
 import { MutationAudit } from "./mutation-audit.mjs";
+import { DESIGN_ACTIONS, designPayload } from "../design/commands.mjs";
+import { MAX_DESIGN_TIMEOUT_MS } from "../design/request-timeout.mjs";
 
 const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
 const DENIED_FILE_IDENTITIES_ENV = "LOCAL_FIGMA_BRIDGE_DENIED_FILE_IDENTITIES";
@@ -28,6 +30,7 @@ const AUTH_CHALLENGE_TTL_MS = 10_000;
 const READ_COMMANDS = new Set(["status", "read_document", "scope_read_node"]);
 const TEST_FIXTURE_COMMANDS = new Set(["scope_create_foreign_fixture", "scope_delete_foreign_fixture"]);
 const ACTION_BY_COMMAND = Object.freeze({
+  ...DESIGN_ACTIONS,
   create_poc: "create", create_text: "create", set_layout: "update", update_poc: "update",
   create_prototype_sample: "prototype", export_poc: "export", delete_poc_owned: "delete",
   scope_create_frame: "create", scope_update_frame: "update", scope_delete_node: "delete",
@@ -92,6 +95,21 @@ function rejectStalePending(connection, pending) {
     pending.sessionId !== connection.metadata.sessionId ||
     pending.fileIdentity !== connection.metadata.fileIdentity
   );
+}
+
+// A synchronous DesignSpec operation can pause the plugin iframe's heartbeat.
+// Defer only for its original bounded request deadline; never renew lastSeen.
+export function deferIdleCloseForDesignRequest(connection, pending, now = Date.now()) {
+  if (!connection?.metadata || connection.authenticated !== true || connection.ready !== true ||
+      connection.socket.readyState !== WebSocket.OPEN || !Number.isFinite(now)) return false;
+  for (const entry of pending.values()) {
+    if (!Object.hasOwn(DESIGN_ACTIONS, entry.command) || rejectStalePending(connection, entry)) continue;
+    const duration = entry.deadlineAt - entry.startedAt;
+    if (Number.isFinite(entry.startedAt) && Number.isFinite(entry.deadlineAt) &&
+        entry.startedAt <= now && duration > 0 && duration <= MAX_DESIGN_TIMEOUT_MS &&
+        now < entry.deadlineAt) return true;
+  }
+  return false;
 }
 
 export async function startBridge({ port, requestTimeoutMs = 12_000, logger, allowTestFixtures = false,
@@ -518,7 +536,9 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
 
   const idleWatchdog = setInterval(() => {
     if (!activeConnection?.metadata) return;
-    if (Date.now() - activeConnection.lastSeen > CONNECTION_IDLE_TIMEOUT_MS) {
+    const now = Date.now();
+    if (now - activeConnection.lastSeen > CONNECTION_IDLE_TIMEOUT_MS &&
+        !deferIdleCloseForDesignRequest(activeConnection, pending, now)) {
       activeConnection.socket.close(4000, "Plugin heartbeat timed out");
     }
   }, 5_000);
@@ -613,8 +633,18 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
       const connection = activeConnection;
       const previousAudit = mutation && TaskAuthorizationStore.validOperationId(payload?.operationId)
         ? auditJournal.latest?.(payload.operationId) : null;
+      // Preserve a durable unknown/applied outcome even if a later call using the
+      // same id has invalid input or authorization. A rejection must not erase
+      // the state that prevents replay after a disconnect or process restart.
+      if (["EXECUTING", "APPLIED", "VERIFIED", "OUTCOME_UNKNOWN"].includes(previousAudit?.state)) {
+        try { auditJournal.record({ ...previousAudit, requestId, result: "retry_blocked",
+          errorCode: "OPERATION_OUTCOME_UNKNOWN" }); }
+        catch (error) { return Promise.reject(error); }
+        return Promise.reject(new Error("OPERATION_OUTCOME_UNKNOWN: reconcile before retry"));
+      }
       let trustedScope;
       let trustedOwnership;
+      let checkedDesignPayload;
       const audit = (state, extra = {}) => {
         if (!mutation) return;
         auditJournal.record({ state, requestId, operationId: payload?.operationId,
@@ -639,6 +669,10 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
       } catch (error) { return Promise.reject(error); }
       if (!ALLOWED_COMMANDS.has(command)) {
         return fail(new Error("Plugin command is not allowlisted"), "COMMAND_NOT_ALLOWED");
+      }
+      if (Object.hasOwn(DESIGN_ACTIONS, command)) {
+        try { checkedDesignPayload = designPayload(command, payload); }
+        catch (error) { return fail(error, "DESIGN_INPUT_INVALID"); }
       }
       if (TEST_FIXTURE_COMMANDS.has(command) && !allowTestFixtures) {
         return fail(new Error("TEST_FIXTURE_DISABLED"));
@@ -682,6 +716,10 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
             action: ACTION_BY_COMMAND[command], revision: payload.revision,
           });
           trustedScope = authorization.scope;
+          if (command === "scope_design_apply" && checkedDesignPayload?.allowGlobalResources &&
+              !authorization.allowedActions.includes("metadata_write")) {
+            throw new Error("GLOBAL_RESOURCES_NOT_AUTHORIZED");
+          }
           trustedOwnership = { workspaceId: authorization.workspaceId,
             taskId: authorization.taskId, revision: authorization.revision };
           if (!trustedScope) throw new Error("SCOPE_REQUIRED");
@@ -689,12 +727,6 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
         } catch (error) {
           return fail(error?.message === "AUTH_FILE_MISMATCH" && command.startsWith("scope_")
             ? new Error("SCOPE_FILE_MISMATCH") : error);
-        }
-        if (["EXECUTING", "APPLIED", "VERIFIED", "OUTCOME_UNKNOWN"].includes(previousAudit?.state)) {
-          try { audit(previousAudit.state, { result: "retry_blocked",
-            errorCode: "OPERATION_OUTCOME_UNKNOWN" }); }
-          catch (error) { return Promise.reject(error); }
-          return Promise.reject(new Error("OPERATION_OUTCOME_UNKNOWN: reconcile before retry"));
         }
       }
       const envelope = {
@@ -714,6 +746,7 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
           parentId: payload.parentId, targetNodeId: payload.targetNodeId,
           sourceNodeId: payload.sourceNodeId, destinationNodeId: payload.destinationNodeId,
           name: payload.name,
+          ...(checkedDesignPayload || {}),
         } : payload,
       };
 
@@ -740,6 +773,7 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
           ...(mutation ? { operationId: payload.operationId } : {}),
           audit,
           startedAt,
+          deadlineAt: startedAt + timeoutMs,
           timer,
           resolve,
           reject,
