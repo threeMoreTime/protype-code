@@ -89,7 +89,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.stderr.write("Usage: node scripts/issue-test-authorization.mjs <figma-file:identity> <clientId> <pageId> <rootNodeId> [actions] [ttlMinutes 1..60]\n");
     process.exitCode = 1;
   } else {
-    const store = new TaskAuthorizationStore({ filePath: path.join(ROOT, "state", "task-authorizations.json") });
+    const store = new TaskAuthorizationStore({ filePath: process.env.LOCAL_FIGMA_BRIDGE_AUTHORIZATION_STATE_PATH || path.join(ROOT, "state", "task-authorizations.json") });
     await store.initialize();
     const record = await store.issueForLocalControl({ workspaceId: WORKSPACE_ID, taskId: TASK_ID,
       fileIdentity, clientId, scope: { fileIdentity, pageId, rootNodeId },

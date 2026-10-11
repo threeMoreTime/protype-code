@@ -11,6 +11,9 @@
     "build:plugin-code": "node scripts/build-plugin-code.mjs",
     "build:plugin": "npm run build:plugin-ui && node scripts/build-plugin-code.mjs",
     "pretest": "npm run build:plugin",
+    "doctor": "node scripts/workflow.mjs doctor",
+    "workflow": "node scripts/workflow.mjs",
+    "verify:delivery": "node scripts/verify-delivery.mjs",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "start": "node mcp/server.mjs"
   },
