@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1.0",
+  "id": "two-size-demo",
+  "name": "Editable two-size prototype",
+  "source": { "revision": "synthetic-fixture", "adapter": "hand-authored-designspec" },
+  "fontPolicy": { "allowFallback": true, "fallback": { "family": "Noto Sans SC", "style": "Regular" } },
+  "variables": [{ "key": "ink", "name": "Ink", "value": { "r": 0.12, "g": 0.1, "b": 0.08, "a": 1 } }],
+  "textStyles": [{ "key": "body", "name": "Body", "fontName": { "family": "Noto Sans SC", "style": "Regular" }, "fontSize": 16 }],
+  "assets": [],
+  "nodes": [
+    { "key": "button", "type": "COMPONENT", "name": "Button", "parentKey": null, "x": 0, "y": -150, "width": 140, "height": 44, "props": { "fills": [{ "type": "SOLID", "color": { "r": 0.8, "g": 0.7, "b": 0.5 } }], "cornerRadius": 8 } },
+    { "key": "button/label", "type": "TEXT", "parentKey": "button", "x": 20, "y": 12, "width": 100, "height": 24, "props": { "characters": "开始处理", "textStyleKey": "body", "fills": [{ "type": "SOLID", "color": { "r": 0.12, "g": 0.1, "b": 0.08 }, "variableKey": "ink" }] } },
+    { "key": "default", "type": "FRAME", "name": "Default", "parentKey": null, "x": 0, "y": 0, "width": 1266, "height": 779, "props": { "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1 } }], "clipsContent": true, "overflowDirection": "VERTICAL" } },
+    { "key": "default/start", "type": "INSTANCE", "parentKey": "default", "x": 32, "y": 32, "width": 140, "height": 44, "props": { "componentKey": "button" } },
+    { "key": "compact", "type": "FRAME", "name": "Compact", "parentKey": null, "x": 1500, "y": 0, "width": 1068, "height": 643, "props": { "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1 } }], "clipsContent": true, "overflowDirection": "VERTICAL" } },
+    { "key": "compact/start", "type": "INSTANCE", "parentKey": "compact", "x": 24, "y": 24, "width": 140, "height": 44, "props": { "componentKey": "button", "overrides": [{ "sourceKey": "button/label", "characters": "紧凑模式开始" }] } },
+    { "key": "complete", "type": "FRAME", "name": "Complete", "parentKey": null, "x": 3000, "y": 0, "width": 1266, "height": 779, "props": { "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1 } }] } },
+    { "key": "complete/message", "type": "TEXT", "parentKey": "complete", "x": 32, "y": 32, "width": 300, "height": 80, "props": { "characters": "处理完成\n此示例仅演示预设状态。", "textStyleKey": "body" } },
+    { "key": "default/scroll-content", "type": "RECTANGLE", "parentKey": "default", "x": 32, "y": 120, "width": 1202, "height": 1080, "props": { "fills": [{ "type": "SOLID", "color": { "r": 0.96, "g": 0.94, "b": 0.9 } }], "cornerRadius": 12, "effects": [{ "type": "DROP_SHADOW", "color": { "r": 0, "g": 0, "b": 0, "a": 0.12 }, "offset": { "x": 0, "y": 2 }, "radius": 8, "spread": 0 }] } },
+    { "key": "default/scroll-top", "type": "TEXT", "parentKey": "default", "x": 56, "y": 144, "width": 450, "height": 48, "props": { "characters": "向下滚动，核对底部标记。\n点击开始后等待 2 秒进入完成状态。", "textStyleKey": "body" } },
+    { "key": "default/scroll-bottom", "type": "TEXT", "parentKey": "default", "x": 56, "y": 1136, "width": 450, "height": 40, "props": { "characters": "默认窗口：已到达滚动区域底部", "textStyleKey": "body" } },
+    { "key": "compact/scroll-content", "type": "RECTANGLE", "parentKey": "compact", "x": 24, "y": 104, "width": 1020, "height": 960, "props": { "fills": [{ "type": "SOLID", "color": { "r": 0.96, "g": 0.94, "b": 0.9 } }], "cornerRadius": 12 } },
+    { "key": "compact/scroll-top", "type": "TEXT", "parentKey": "compact", "x": 48, "y": 128, "width": 450, "height": 48, "props": { "characters": "紧凑窗口也支持独立滚动。\n按钮文字来自组件实例覆盖。", "textStyleKey": "body" } },
+    { "key": "compact/scroll-bottom", "type": "TEXT", "parentKey": "compact", "x": 48, "y": 1000, "width": 450, "height": 40, "props": { "characters": "紧凑窗口：已到达滚动区域底部", "textStyleKey": "body" } },
+    { "key": "processing", "type": "FRAME", "name": "Default · Processing · 2 seconds", "parentKey": null, "x": 0, "y": 1600, "width": 1266, "height": 779, "props": { "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1 } }] } },
+    { "key": "processing/message", "type": "TEXT", "parentKey": "processing", "x": 32, "y": 32, "width": 420, "height": 80, "props": { "characters": "正在处理……\n2 秒后自动进入完成状态", "textStyleKey": "body" } },
+    { "key": "compact-processing", "type": "FRAME", "name": "Compact · Processing · 2 seconds", "parentKey": null, "x": 1500, "y": 1600, "width": 1068, "height": 643, "props": { "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1 } }] } },
+    { "key": "compact-processing/message", "type": "TEXT", "parentKey": "compact-processing", "x": 24, "y": 24, "width": 420, "height": 80, "props": { "characters": "正在处理……\n2 秒后自动进入紧凑完成状态", "textStyleKey": "body" } },
+    { "key": "compact-complete", "type": "FRAME", "name": "Compact · Complete", "parentKey": null, "x": 3000, "y": 1600, "width": 1068, "height": 643, "props": { "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1 } }] } },
+    { "key": "compact-complete/message", "type": "TEXT", "parentKey": "compact-complete", "x": 24, "y": 24, "width": 420, "height": 80, "props": { "characters": "紧凑模式处理完成\n此示例仅演示预设状态。", "textStyleKey": "body" } }
+  ],
+  "reactions": [
+    { "sourceKey": "default/start", "trigger": { "type": "ON_CLICK" }, "destinationKey": "processing" },
+    { "sourceKey": "compact/start", "trigger": { "type": "ON_CLICK" }, "destinationKey": "compact-processing" },
+    { "sourceKey": "processing", "trigger": { "type": "AFTER_TIMEOUT", "delaySeconds": 2 }, "destinationKey": "complete" },
+    { "sourceKey": "compact-processing", "trigger": { "type": "AFTER_TIMEOUT", "delaySeconds": 2 }, "destinationKey": "compact-complete" }
+  ],
+  "flows": [{ "nodeKey": "default", "name": "Default" }, { "nodeKey": "compact", "name": "Compact" }]
+}
