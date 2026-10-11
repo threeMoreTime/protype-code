@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0",
+  "runId": "replace-with-current-run-id",
+  "specId": "replace-with-design-spec-id",
+  "specSignature": "0000000000000000000000000000000000000000000000000000000000000000",
+  "startedAt": "2026-01-01T00:00:00.000Z",
+  "expectedCounts": { "nodes": 3, "texts": 1, "components": 0, "instances": 0, "reactions": 2, "flows": 2, "textStyles": 0, "variables": 0 },
+  "expectedVisualKeys": ["default-home", "compact-home"],
+  "expectedPresentCases": ["default-navigation", "compact-scroll"],
+  "artifact": "prototype.fig",
+  "originalAudit": "original-audit.json",
+  "reimportAudit": "reimport-audit.json",
+  "exportRecord": "export-record.json",
+  "reimportRecord": "reimport-record.json",
+  "present": "present.json",
+  "visual": [],
+  "limitations": ["Example only. Replace identifiers, counts, timestamps and references with actual evidence; missing evidence produces NOT_RUN."]
+}
