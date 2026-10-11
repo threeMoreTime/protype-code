@@ -15,6 +15,25 @@ const FILE = "figma-file:task-auth-test-b";
 const CLIENT = "client-task-auth-test";
 const OP = "op-authorization-test-01";
 const scope = (fileIdentity) => ({ fileIdentity, pageId: "1:1", rootNodeId: "1:2" });
+const designSpec = { schemaVersion: '1.0', id: 'transport-test', name: 'Transport',
+  nodes: [{ key: 'frame', type: 'FRAME', parentKey: null, x: 0, y: 0, width: 100, height: 80, props: {} }] };
+
+test('design commands preserve validated data through authenticated scoped transport', async t => {
+  const { bridge, authorizationStore, requests } = await fixture(t);
+  const grant = await authorizationStore.issueForLocalControl({ workspaceId: WORKSPACE_ID, taskId: TASK_ID,
+    fileIdentity: FILE, scope: scope(FILE), clientId: CLIENT, allowedActions: ['design', 'read', 'export'], revision: '1',
+    expiresAt: new Date(Date.now() + 60_000).toISOString() });
+  const input = { expectedFileIdentity: FILE, workspaceId: WORKSPACE_ID, taskId: TASK_ID,
+    authorizationId: grant.authorizationId, revision: '1', operationId: 'op-design-transport-01', spec: designSpec, runId: 'transport-test', batchSize: 20 };
+  await bridge.callPlugin('scope_design_apply', input);
+  assert.deepEqual(requests.at(-1).payload.spec, designSpec);
+  assert.equal(requests.at(-1).payload.batchSize, 20);
+  assert.deepEqual(requests.at(-1).trustedScope, scope(FILE));
+  await assert.rejects(bridge.callPlugin('scope_design_apply', { ...input, operationId: 'op-design-global-001', allowGlobalResources: true }), /GLOBAL_RESOURCES_NOT_AUTHORIZED/);
+  await assert.rejects(bridge.callPlugin('scope_design_apply', { ...input, operationId: 'op-design-unsafe-001', code: 'figma.root.remove()' }), /DESIGN_INPUT_UNKNOWN/);
+  await bridge.callPlugin('scope_design_plan', { ...input, operationId: 'op-design-plan-0001' });
+  assert.equal(requests.length, 2, 'denied calls never reach the plugin');
+});
 
 function nextMessage(socket, type) {
   return new Promise((resolve, reject) => {
@@ -128,6 +147,13 @@ test('persisted timeout blocks the same logical mutation after Bridge restart', 
   assert.equal(second.requests.length, 0, 'same logical write must not reach plugin after restart');
   assert.equal(reloadedAudit.latest(operationId).state, 'OUTCOME_UNKNOWN');
   assert.equal(reloadedAudit.latest(operationId).result, 'retry_blocked');
+  await assert.rejects(second.bridge.callPlugin('scope_design_apply', { ...input, spec: null,
+    authorizationId: 'auth-invalid', expectedFileIdentity: 'figma-file:other' }), /OPERATION_OUTCOME_UNKNOWN/);
+  assert.equal(reloadedAudit.latest(operationId).state, 'OUTCOME_UNKNOWN', 'invalid input must not erase the earlier unknown outcome');
+  assert.equal(reloadedAudit.latest(operationId).fileIdentity, FILE);
+  assert.equal(reloadedAudit.latest(operationId).command, 'scope_create_frame');
+  await assert.rejects(second.bridge.callPlugin('scope_create_frame', input), /OPERATION_OUTCOME_UNKNOWN/);
+  assert.equal(second.requests.length, 0);
 });
 
 test('mutation audit records server rejection, applied response, and unknown timeout without blind retry', async (t) => {

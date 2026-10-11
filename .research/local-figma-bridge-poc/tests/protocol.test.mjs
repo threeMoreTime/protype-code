@@ -33,6 +33,13 @@ test('1 ms create timeout fixture is exposed only by an explicitly enabled devel
   await client.connect(transport);
   const names = (await client.listTools()).tools.map((tool) => tool.name);
   assert.equal(names.includes('figma_test_scope_create_frame_1ms_timeout'), true);
+  assert.equal(names.includes('figma_scope_design_apply'), true);
+  const invalid = await client.callTool({ name: 'figma_scope_design_plan', arguments: {
+    expectedFileIdentity: 'figma-file:synthetic', workspaceId: WORKSPACE_ID, taskId: TASK_ID,
+    runId: 'test', spec: {}, unexpectedExecutable: 'figma.root.remove()',
+  } });
+  assert.equal(invalid.isError, true);
+  assert.match(invalid.content[0].text, /Unrecognized key|unrecognized_keys/);
 });
 
 async function getFreePort() {

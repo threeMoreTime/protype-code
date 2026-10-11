@@ -8,7 +8,9 @@
   },
   "scripts": {
     "build:plugin-ui": "node scripts/build-plugin-ui.mjs",
-    "pretest": "npm run build:plugin-ui",
+    "build:plugin-code": "node scripts/build-plugin-code.mjs",
+    "build:plugin": "npm run build:plugin-ui && node scripts/build-plugin-code.mjs",
+    "pretest": "npm run build:plugin",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "start": "node mcp/server.mjs"
   },

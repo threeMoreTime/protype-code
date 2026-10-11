@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export const AUTH_ACTIONS = new Set(["create", "update", "delete", "prototype", "metadata_write", "export", "test_fixture"]);
+export const AUTH_ACTIONS = new Set(["create", "update", "delete", "prototype", "metadata_write", "export", "test_fixture", "design", "read"]);
 const IDENTIFIER = /^[A-Za-z0-9._:-]{1,160}$/;
 const OPERATION_ID = /^op-[A-Za-z0-9_-]{8,100}$/;
 const UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
