@@ -3,7 +3,7 @@
   "overallStatus": "POC_FEASIBLE_NOT_PRODUCTION_READY",
   "currentPhase": "8.0",
   "currentPhaseName": "Bridge Hardening",
-  "currentIncrement": "8.0-G Hardening Gate Suite",
+  "currentIncrement": "DesignSpec pipeline implementation and live acceptance",
   "formalH5WriteAuthorized": false,
   "codexCliMcp": "VERIFIED",
   "codexDesktopMcp": "NOT VERIFIED",
@@ -96,5 +96,1738 @@
     "hardeningPluginReloadLive": "Local runtime records are not included in the public evidence package",
     "hardeningPluginReloadAudit": "Local runtime records are not included in the public evidence package",
     "hardeningPluginReloadRegression": "Local runtime records are not included in the public evidence package"
+  },
+  "designPipeline": {
+    "date": "2026-10-11",
+    "implementation": "LOCAL_WORKTREE",
+    "automatedTests": "PASS",
+    "automatedTestsScope": "Latest full npm test after float32 fontsize and lineHeight handling:372 passed,0 failed/cancelled/skipped; pretest built plugin. Latest textfit file has45 tests. Earlier360/305/290/229 full suites and38 target log remain historical. Logs directly read by docs delegate; no rerun. Does not prove native full55 visual/Present/round-trip acceptance.",
+    "latestImplementationFullSuite": "PASS",
+    "lastValidatedImplementationFullSuite": "PASS",
+    "lastValidatedImplementationFullSuiteLog": ".local/reports/2026-10-11-text-layout-float32-full-test.txt",
+    "finalGate": "IN_PROGRESS",
+    "liveRunId": "demo-v5-20261008",
+    "liveGeneration": "COMPLETE",
+    "liveAudit": "PASS",
+    "liveAuditErrors": [],
+    "liveVerifiedCounts": {
+      "nodes": 20,
+      "texts": 9,
+      "components": 1,
+      "instances": 2,
+      "reactions": 4,
+      "flows": 2,
+      "textStyles": 1,
+      "variables": 1
+    },
+    "livePresent": "PASS",
+    "livePresentScope": "Independent v5 reimport: both navigation flows reached processing and automatically completed; both scrolling cases revealed their bottom marker. Four representative cases only; exact timer duration was not measured.",
+    "liveDefaultNavigation": "PASS",
+    "liveCompactNavigation": "PASS",
+    "liveTimerElapsedAccuracy": "NOT_MEASURED",
+    "liveScroll": "PASS",
+    "liveFontAndFrameReadability": "PASS",
+    "liveVisualAcceptance": "NOT_RUN",
+    "liveVisualAcceptanceScope": "Full visual fidelity remains unverified; two homepage round-trip pixel comparisons and representative Present readability passed.",
+    "twoSizePixelRoundTrip": "PASS",
+    "livePngExport": "PASS",
+    "live55SceneGeneration": "PARTIAL_FAILURE",
+    "live55SceneRunId": "archivelens-full55-20261009",
+    "live55SceneAppliedNodes": 143,
+    "live55SceneTotalNodes": 13193,
+    "live55SceneFinalizedNodes": 0,
+    "live55SceneFailure": "Historical first run: set_vectorPaths rejected SVG command A. Its pending host node and failed audit are preserved. Arc conversion and bounds scaling have since passed independent small native probes; full55 acceptance has not passed.",
+    "live55SceneAcceptance": "NOT_RUN",
+    "nativeFigExport": "PASS",
+    "nativeImport": "PASS",
+    "nativeFigRoundTrip": "PASS",
+    "semanticRoundTrip": "PASS",
+    "twoSizeDeliveryGate": "PASS",
+    "twoSizeDeliveryPackageReplay": "PASS",
+    "twoSizeDeliveryScope": "20-node example only: native file, independent reimport audit, semantic comparison, zero-difference homepage PNG comparisons, and four Present cases. Does not establish 55-scene acceptance or exact timer duration.",
+    "liveRunChanges": "White root-frame fills and explicit timerUnit seconds. Both original and reimported documents reached completion automatically in both sizes with readable text; reimport scrolling passed. Exact two-second timing was not measured.",
+    "previousLiveRun": {
+      "runId": "demo-v4-20261008",
+      "nativeFigExport": "PASS",
+      "nativeFigRoundTrip": "PASS",
+      "semanticRoundTrip": "PASS",
+      "twoSizePixelRoundTrip": "PASS",
+      "livePresent": "FAIL",
+      "liveVisualAcceptance": "FAIL",
+      "defaultNavigation": "OBSERVED",
+      "defaultTimer": "FAIL",
+      "compactNavigation": "NOT_RUN",
+      "twoSizeScroll": "PASS",
+      "observedFailures": "Figma 126.9.13 displayed 2000000ms for API timeout 2000; default processing did not finish after several seconds. Transparent root frames made black text unreadable in Present. This is an observation of this host/run, not a universal API assertion."
+    },
+    "historicalCaptureConversion": {
+      "schema": "PASS",
+      "sceneCount": 55,
+      "nodeCount": 13193,
+      "reactionCount": 739,
+      "clickReactionCount": 738,
+      "timerReactionCount": 1,
+      "unchangedPresetCount": 92,
+      "warnings": 214,
+      "visual": "NOT_RUN",
+      "figmaRuntime": "NOT_RUN"
+    },
+    "report": "docs/verification/2026-10-08-design-pipeline.md",
+    "historicalBridgeEvidence": "Existing VERIFIED values refer to their dated reports, not this new increment.",
+    "arcGradientProbe": {
+      "auditErrors": 0,
+      "pngExport": "PASS",
+      "visual": "OBSERVED",
+      "generation": "COMPLETE",
+      "nativeFigRoundTrip": "NOT_RUN",
+      "audit": "PASS",
+      "nodes": 4,
+      "runId": "arc-gradient-probe-v3-20261009",
+      "scope": "Arc geometry, empty vector strokes and a native linear gradient only; does not establish 55-scene or sticky-scroll acceptance."
+    },
+    "allVectorsProbe": {
+      "nativeFigRoundTrip": "NOT_RUN",
+      "generation": "COMPLETE",
+      "pngExport": "PASS",
+      "runId": "all-vectors-probe-v4-20261009",
+      "nodes": 35,
+      "vectors": 34,
+      "audit": "PASS",
+      "auditErrors": 0
+    },
+    "previous55SceneRun": {
+      "runId": "archivelens-full55-v2-20261009",
+      "reason": "Host materialized a closing L before Z. Readback comparison has since been repaired and all34 vector probe passed. Failed run is preserved.",
+      "applied": 155,
+      "total": 13193,
+      "generation": "PARTIAL_FAILURE",
+      "finalized": 0
+    },
+    "current55SceneRun": {
+      "specId": "archivelens-native-v5-image-live-20261009",
+      "specSha256": "0f560dd21dd4ffc64c259ba32741b60b2501d4d5d5698cffc398de76afc36fcd",
+      "specSha256Basis": "Raw input file bytes",
+      "serializedSpecSha256": "49a08dec07cd0c2d6264fa6d2125ed9d863241bbf11b29e6cb9617ed567abb89",
+      "specSignature": "6d0c2c4f4b0c719d00f3ea90e465e5af02cd466a3ccbd72424a767d0a5bff893",
+      "runId": "archivelens-full55-v5-image-live-20261009",
+      "pageId": "21:10117",
+      "rootNodeId": "21:10117",
+      "generation": "COMPLETE",
+      "lastAcknowledgedApplied": 13193,
+      "total": 13193,
+      "lastAcknowledgedFinalized": 13193,
+      "finalized": true,
+      "remainingFinalization": 0,
+      "acknowledgedAt": "2026-10-10T01:46:57.122Z",
+      "checkpointEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.apply.op-16f81855-91b3-426f-ae62-1fd9d1669d58.json",
+      "previousConnectionInterruptedCheckpoint": {
+        "applied": 13193,
+        "finalizedNodes": 9584,
+        "pending": null,
+        "acknowledgedAt": "2026-10-09T14:40:39.662Z",
+        "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.apply.op-443b4385-0819-41e6-8eda-333b01c7e623.json"
+      },
+      "previousPrePrefetchCheckpoint": {
+        "applied": 13193,
+        "finalizedNodes": 2584,
+        "pending": null,
+        "acknowledgedAt": "2026-10-09T13:24:30.008Z",
+        "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.apply.op-c157efcc-7546-4c6f-bc12-3785bf2be45f.json"
+      },
+      "failure": "DESIGN_NATIVE_FLOW_CHANGE_CONFLICT",
+      "failureScope": "Historical pre-adoption failure retained; not the current reconcile outcome.",
+      "currentFailure": null,
+      "preAdoptionFailureCheckpoint": {
+        "generation": "PARTIAL_FAILURE",
+        "applied": 13193,
+        "finalizedNodes": 584,
+        "acknowledgedAt": "2026-10-09T10:45:17.643Z",
+        "pendingOperationId": "op-0547021d-642d-4512-b640-ae5b4eb45d50",
+        "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.apply.op-0547021d-642d-4512-b640-ae5b4eb45d50.json"
+      },
+      "nextAction": "verify-corrected-candidate-in-new-scope-before-full-visual-present-and-independent-reimport",
+      "lastGenerationNextAction": "audit",
+      "plan": "PLANNED",
+      "planWrites": 0,
+      "planEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.plan.op-f6a2e1a5-8ed8-45ac-9a13-a4f1256e7534.json",
+      "planAcknowledgedAt": "2026-10-10T01:37:05.797Z",
+      "previousResumePlan": {
+        "status": "PLANNED",
+        "writes": 0,
+        "acknowledgedAt": "2026-10-09T10:07:15.687Z",
+        "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.plan.op-ef5c4522-56e5-4bb5-be17-47454a0fac79.json"
+      },
+      "startedAt": "2026-10-09T07:14:43.490Z",
+      "audit": "PASS",
+      "finalAudit": "PASS",
+      "structuralAcceptance": "PASS",
+      "resourceAcceptance": "PASS",
+      "reactionAcceptance": "PASS",
+      "finalReadOnlyAudit": {
+        "status": "PASS",
+        "writes": 0,
+        "collectedAt": "2026-10-10T01:49:36.833Z",
+        "capturedAt": "2026-10-10T01:57:41.613Z",
+        "paginationComplete": true,
+        "pageCount": 7,
+        "pageCountSource": "Parent actual seven-page pagination execution; complete merged result independently read by docs delegate.",
+        "totalNodes": 13193,
+        "snapshotSignature": "ad400790d82cf671bcc13d7f6bec9ca4f34b95d78dbd5e22b3fca5c946848535",
+        "bytes": 18522833,
+        "fileSha256": "b4bacca02d74427ced1a19dca7611b847b41121e22ac504a40743b51ab67ce5e",
+        "independentSizeAndHashCheck": "PASS",
+        "counts": {
+          "nodes": 13193,
+          "texts": 4170,
+          "components": 33,
+          "instances": 713,
+          "reactions": 739,
+          "flows": 2,
+          "textStyles": 50,
+          "variables": 102
+        },
+        "errorCount": 0,
+        "errors": [],
+        "deliveryAuditCheck": "PASS_REPORTED_BY_PARENT",
+        "deliveryAuditCheckBasis": "Parent independently ran validateAudit against the current delivery manifest; docs delegate did not run code or tests.",
+        "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.audit.op-dc1fbb91-bbb6-4ba2-b904-bc594d86b9d8.json",
+        "scope": "Final original-file complete structural,resource and reaction/flow audit only. Not visual,Present,final fig export,independent reimport or complete delivery acceptance; old unknown operation origin remains unproved."
+      },
+      "partialReadOnlyAudit": {
+        "status": "FAIL",
+        "writes": 0,
+        "collectedAt": "2026-10-09T12:36:59.581Z",
+        "capturedAt": "2026-10-09T12:45:28.135Z",
+        "paginationComplete": true,
+        "pageCount": 7,
+        "pageCountSource": "Parent actual pagination execution; complete merged result independently checked.",
+        "totalNodes": 13193,
+        "snapshotSignature": "d5bd31ccf303acf4b110ea2c09ace6deb23472427a99e115ea2592a0080e3368",
+        "bytes": 18441572,
+        "fileSha256": "cdd4d561dc10d5081f64428a69db234f2df2ea82623a6f7194f5a11281965603",
+        "uniqueStableKeys": 13193,
+        "stableKeySetMatchesSpec": "VERIFIED_BY_PARENT",
+        "counts": {
+          "nodes": 13193,
+          "texts": 4170,
+          "components": 33,
+          "instances": 713,
+          "reactions": 8,
+          "flows": 2,
+          "textStyles": 50,
+          "variables": 102
+        },
+        "errors": {
+          "REACTION_MISMATCH": 731,
+          "FLOW_MISMATCH": 1,
+          "UNRESOLVED_PENDING_OPERATION": 1,
+          "DESIGN_NOT_COMPLETE": 1
+        },
+        "otherErrorTypes": [],
+        "propertyOwnershipHierarchyErrorsReported": false,
+        "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.audit.op-ca802f1a-40f8-49f5-9ac8-e457fbe20834.json",
+        "scope": "Historical complete pre-adoption unfinished-state evidence at13193/584 with legacy pending. Later adoption does not rewrite this FAIL; no final PASS,origin proof,visual/playback or delivery claim."
+      },
+      "acceptance": "NOT_RUN",
+      "pngExport": "PASS",
+      "pngExportProgress": {
+        "exported": 12,
+        "planned": 12,
+        "lastExportedAt": "2026-10-10T02:10:36.734Z",
+        "evidence": ".local/reports/2026-10-10-full55-original-export-progress.json",
+        "localSizeHashAndDimensions": "PASS",
+        "scope": "Twelve native exports; documentation delegate independently checked saved destination size,SHA256 and PNG dimensions. Export report pending-review label is historical; current review recorded separately."
+      },
+      "visualAcceptance": "FAIL",
+      "nativeVisualReview": {
+        "status": "FAIL",
+        "gate": "FAIL",
+        "reviewedAt": "2026-10-10T02:15:05.107Z",
+        "reviewer": "design_delivery_qa",
+        "reviewed": 12,
+        "planned": 12,
+        "remaining": 0,
+        "failedFrames": 12,
+        "framesWithP1": 11,
+        "p1Findings": 22,
+        "p2Findings": 6,
+        "findingSummary": "Text wrapping/clipping/overlap,toolbar occlusion,inline fragments,missing progress and incorrect closed-detail visibility. Compact update has P2; other11 frames contain P1.",
+        "findingEvidence": "OBSERVED_BY_REVIEWER_DIRECT_NATIVE_AND_HISTORICAL_PNG_COMPARISON",
+        "sourceScale": "Historical approximately1.25 relative to capture viewport; native1.0. Direct visual review,not zero-pixel comparison.",
+        "toleranceChanged": false,
+        "roundTripPixelComparison": "NOT_RUN",
+        "presentPlayback": "NOT_RUN",
+        "evidence": ".local/reports/2026-10-10-full55-native-visual-review.json",
+        "scope": "All12 planned representative frames reviewed; not all55 frames. Findings are recurring per-frame observations,not22 distinct root causes. Font approval does not approve readability defects. Original v5 unchanged."
+      },
+      "textFidelityRepair": {
+        "status": "IMPLEMENTED_CONTRACT_TESTED_LIMITED_NATIVE_PROBE",
+        "diagnosisEvidence": ".local/reports/2026-10-10-full55-text-fidelity-diagnosis.md",
+        "diagnosisAt": "2026-10-10T02:07:40.611Z",
+        "diagnosisSnapshotStatus": "DIAGNOSED_FIX_NOT_STARTED",
+        "diagnosisSummary": "Tight DOM Range bounds become fixed NONE text boxes; substituted font metrics can add lines while parent and sibling positions remain fixed. Per-glyph advance differences have not been independently measured.",
+        "implementationScope": "Default-compatible opt-in textBounds,paintOrder and nativeControls in capture adapter/CLI; explicit visible retained by exact vector extraction. See designPipeline.captureFidelityOptions.",
+        "implementationComplete": "VERIFIED_SOURCE_AND_FULL_TESTS",
+        "nativeVerification": "LIMITED_SOURCE_BOUNDS_PROBE_PASS_FULL55_NOT_RUN",
+        "originalV5Changed": false,
+        "scope": "Sixteen-node flattened source-bounds probe only:three expanded texts improved and controls retained. No original parent clipping or complete scene. Existing v5 visual FAIL retained; corrected full55 native render NOT_RUN."
+      },
+      "present": "NOT_RUN",
+      "nativeFigExport": "PASS",
+      "independentReimport": "NOT_RUN",
+      "deliveryGate": "NOT_RUN",
+      "localOperationStateAtRead": "COMPLETE",
+      "scope": "Original v5 generation COMPLETE13193/13193; final seven-page zero-write structural audit PASS. Twelve PNG exports and local hashes verified,12/12 representative visual review FAIL. Complete-structure native fig saved and container PASS; file-level backup includes history/probes,Page16 is structural scope. Independent reimport,full Present and delivery NOT_RUN. Source fixes and limited probes do not repair or reaccept old v5. Old op-8b origin remains OUTCOME_UNKNOWN.",
+      "resume20261010": {
+        "status": "NODES_COMPLETE_ORIGINAL_FULL_AUDIT_PASS",
+        "evidence": ".local/reports/2026-10-10-complete-nodes-resume.json",
+        "documentationReport": ".local/reports/2026-10-10-resume-docs-sync.md",
+        "fileIdentity": "figma-file:OzCxJpHmpEUTMflnnpL5VW",
+        "pageId": "21:10117",
+        "freshPlanAt": "2026-10-10T01:37:05.797Z",
+        "freshPlanFinalizedNodes": 10584,
+        "freshPlanWrites": 0,
+        "freshPlanPending": null,
+        "ordinaryReconcile": "EXPLICIT_NO_ADOPT_REPORTED_BY_PARENT",
+        "priorDispatchedUnknownOperation": "op-8b3c0906-9ed2-4ef8-a46e-cc8445f9aa9c",
+        "priorOperationOrigin": "STILL_OUTCOME_UNKNOWN_CURRENT_STATE_VERIFIED_ONLY",
+        "completionOperationId": "op-16f81855-91b3-426f-ae62-1fd9d1669d58",
+        "completedAt": "2026-10-10T01:46:57.122Z",
+        "scope": "Fresh current-state readback and new complete acknowledgment only; neither proves the original op-8b outcome nor rewrites op-508 historical unknown evidence. Node completion is not final audit or delivery acceptance."
+      },
+      "exactStateAdoption": {
+        "status": "VERIFIED_ONLY_EXACT_CURRENT_STATE_NOT_ORIGIN",
+        "operationId": "op-78451ea8-171c-46f0-9a82-b1c15d05985d",
+        "observedAt": "2026-10-09T13:14:27.459Z",
+        "acknowledgedAt": "2026-10-09T13:15:32.96Z",
+        "latencyMsReportedByParent": 120169,
+        "humanApprovalEvidence": ".local/reports/2026-10-09-full55-flow-adoption-human-approval.json",
+        "executionComparison": "APPROVED_SNAPSHOT_MATCH",
+        "executionComparisonEvidence": ".local/reports/2026-10-09-full55-flow-adoption-execution-readback.json",
+        "executionReadbackAt": "2026-10-09T13:12:58.907Z",
+        "executionReadbackEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.read-node.21%3A10855.1791551578907.json",
+        "executionEvidenceFileHashVerified": true,
+        "reconcileEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.reconcile.op-78451ea8-171c-46f0-9a82-b1c15d05985d.json",
+        "independentReadbackAt": "2026-10-09T13:16:13.641Z",
+        "independentReadbackEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.read-node.21%3A10855.1791551773641.json",
+        "sourceId": "21:10855",
+        "sourceKey": "extra-compact-review-menu/portal-extra-compact-review-menu-4",
+        "nativeFlowObservationVersion": 2,
+        "nativeFlowObservationEntries": 3,
+        "provenance": "EXPLICIT_READBACK_ADOPTION",
+        "verification": "CURRENT_STATE_ADOPTED_NOT_ORIGIN_PROVED",
+        "originalSetterReactionReadback": null,
+        "legacyPendingIdentity": {
+          "kind": "reactions",
+          "key": "extra-compact-review-menu/portal-extra-compact-review-menu-4",
+          "startedAt": "2026-10-09T10:45:17.506Z",
+          "operationId": "op-0547021d-642d-4512-b640-ae5b4eb45d50"
+        },
+        "explicitPayloadFields": [
+          "pendingOperationId",
+          "flowSnapshotSignature",
+          "reactionSnapshotSignature"
+        ],
+        "sourceReactionRecord": "PRESENT",
+        "sourceReactionRecordVersion": 2,
+        "sourceReactionDigestMatchesApprovedSnapshot": true,
+        "activePendingAtAcknowledgment": null,
+        "scope": "Exact approved current-state adoption and source-node independent readback only. Original failed receipt and partial fig backup remain; no setter replay or fabricated original success receipt. Generation was IN_PROGRESS at this historical adoption acknowledgment; current generation status is recorded separately,not final audit/playback/round-trip acceptance."
+      },
+      "preAssignmentHandleCheck": {
+        "implementation": "IMPLEMENTED_CONTRACT_TESTED",
+        "nativeFull55": "NOT_VERIFIED",
+        "nativeRegenerationBranch": "NOT_VERIFIED",
+        "oldV4FillRepair": "NOT_RUN",
+        "guardBypass": false
+      },
+      "settings": {
+        "designTimeoutMs": 180000,
+        "batchSize": 500,
+        "auditLimit": 2000,
+        "timerUnit": "seconds"
+      },
+      "quotaPolicy": "Pause at weekly used100% or five-hour remaining<=3%. Historical weekly100 pause and later94% snapshot preserved; recheck live tool before applying current threshold.",
+      "execution": {
+        "status": "RESUMED_APPROVED_LAYOUT_AND_TEXTFIT_PROBES_IN_PROGRESS",
+        "liveQuotaVerification": "VERIFIED_ACCOUNT_PRIMARY_300_MIN_WINDOW",
+        "liveQuotaObservationSource": "Historical parent five-hour quota snapshot remaining99%,not current usage; exact timestamp unavailable. Recheck live before threshold decisions.",
+        "liveQuotaObservedAt": null,
+        "liveQuotaObservedAtLocal": null,
+        "liveQuotaExactObservationTime": "NOT_RECORDED_IN_DELEGATED_EVIDENCE",
+        "liveQuotaUsedPercent": 1,
+        "liveQuotaUsedPercentBasis": "Historical calculation as100 minus parent reported remaining99%; not a current quota reading.",
+        "liveQuotaRemainingPercent": 99,
+        "pauseAtRemainingPercent": 3,
+        "generationCli": "CURRENT_STATE_NOT_VERIFIED",
+        "generationCliId": null,
+        "generationCliExitCode": null,
+        "pluginUi": "CURRENT_STATE_NOT_VERIFIED",
+        "processObservedAt": null,
+        "nativeWriteInFlight": null,
+        "processObservationSource": "Prior weekly pause CLI63636/80684 exit0,plugin closed,no pending writes is historical. Current native session state is not independently verified by docs delegate; new probes require fresh evidence.",
+        "previousNativeSafeStop": {
+          "generationCliId": 73982,
+          "exitCode": 0,
+          "pluginUi": "CLOSED_REPORTED_BY_PARENT",
+          "observedAt": "2026-10-09T12:47:06Z",
+          "nativeWriteInFlight": false
+        },
+        "handoffEvidence": ".local/reports/2026-10-09-flow-api-native-v2-resume.md",
+        "approval": {
+          "status": "USER_APPROVED_AND_EXECUTED_EXACT_STATE",
+          "authorizationSource": "Parent relayed the user's explicit reply allowing adoption of the verified current state and continuation. Approval time was not separately recorded; quota timestamp is not the approval timestamp.",
+          "previousStatus": "REQUESTED_NOT_RECEIVED",
+          "humanApprovalEvidence": ".local/reports/2026-10-09-full55-flow-adoption-human-approval.json",
+          "proposal": ".local/reports/2026-10-09-full55-flow-adoption-proposal-fresh.json",
+          "proposalCreatedAt": "2026-10-09T12:34:33.839Z",
+          "freshReadbackAt": "2026-10-09T12:34:14.699Z",
+          "freshReadbackEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.read-node.21%3A10855.1791549254699.json",
+          "freshEvidenceFileSha256": "981dc79bbdd0baf69d5209ca4111b254613c3276b24dd001882eb16be551daae",
+          "freshEvidenceFileHashVerified": true,
+          "semanticSignaturesMatchPreviousProposal": true,
+          "legacySetterOrigin": "NOT_VERIFIED_FOR_LEGACY_FAILURE",
+          "adoption": "VERIFIED_ONLY_EXACT_CURRENT_STATE_NOT_ORIGIN",
+          "scope": "User-approved exact-state adoption executed and independently read back. Original setter provenance remains unproved. Full generation was incomplete at this historical adoption acknowledgment; current generation is recorded separately and final55 gates remain incomplete. The approval record retains its pre-execution status as historical evidence."
+        },
+        "pending": null,
+        "pendingScope": "Null at2026-10-10T01:46:57.122Z complete apply acknowledgment. Old identity is retained in adoption recovery and original failure evidence. Old dispatched op-8b origin remains unknown; no blind replay or fabricated origin confirmation.",
+        "resumeReport": ".local/reports/2026-10-09-resume-quota-timer.md",
+        "currentResumeReport": ".local/reports/2026-10-10-complete-nodes-resume.json",
+        "previousPreConnectionPauseQuotaReading": {
+          "observedAt": null,
+          "remainingPercent": 10,
+          "source": "Historical parent real-time reading before connection interruption; exact time not separately recorded."
+        },
+        "previousLiveQuotaReading": {
+          "observedAtLocal": "2026-10-09 18:02 Asia/Shanghai",
+          "usedPercent": 1,
+          "remainingPercent": 99
+        },
+        "previousResumeQuotaReading": {
+          "observedAt": "2026-10-09T12:20:50Z",
+          "usedPercent": 1,
+          "remainingPercent": 99
+        },
+        "previousSafeStopQuotaReading": {
+          "observedAt": "2026-10-09T12:47:06Z",
+          "usedPercent": 43,
+          "remainingPercent": 57
+        },
+        "previousAdoptionQuotaReading": {
+          "observedAt": "2026-10-09T13:10:43Z",
+          "usedPercent": 49,
+          "remainingPercent": 51
+        },
+        "previousPrefetchMeasurementQuotaReading": {
+          "observedAt": null,
+          "remainingPercent": 17,
+          "source": "Parent actual real-time usage reading; exact timestamp not supplied."
+        },
+        "previousDiagnosticQuotaReading": {
+          "remainingPercent": 48,
+          "usedPercent": 52,
+          "observedAtLocal": null,
+          "observationSource": "Previous parent real-time five-hour usage reading before diagnostic probes; exact time not recorded in delegated evidence."
+        },
+        "previousThresholdPause": {
+          "status": "PAUSED_QUOTA_THRESHOLD",
+          "recordedAt": "2026-10-09T11:25:55Z",
+          "remainingPercent": 3,
+          "observationSource": "Parent actual five-hour usage threshold reading and pause.",
+          "nativeGeneration": "PARTIAL_FAILURE",
+          "applied": 13193,
+          "finalizedNodes": 584,
+          "oldPendingUnchanged": true,
+          "nativeWriteInFlight": false
+        },
+        "previousSafeCheckpoint": {
+          "status": "IN_PROGRESS_SAFE_CHECKPOINT_ASYNC_GUARD_VALIDATED",
+          "applied": 7750,
+          "finalizedNodes": 0,
+          "acknowledgedAt": "2026-10-09T10:13:15.414Z",
+          "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.apply.op-dc437453-7758-4592-8912-5edf1680b137.json",
+          "generationCli": "EXITED_AT_SAFE_CHECKPOINT",
+          "generationCliExitCode": 0,
+          "generationCliShutdownAt": "2026-10-09T10:13:41Z",
+          "pending": null
+        },
+        "asyncGuardValidation": {
+          "status": "IMPLEMENTED_CONTRACT_TESTED",
+          "finding": "Read-only review identified missing fresh guard before next Frame orderChildren after setReactionsAsync await; possible overwrite of a user numberOfFixedChildren change.",
+          "findingSource": "Runtime source, dedicated review report and three deterministic API-double RED/GREEN regressions.",
+          "reviewEvidence": ".local/reports/2026-10-09-full55-guard-readonly-review.md",
+          "actualUserOverwrite": "NOT_VERIFIED",
+          "fix": "IMPLEMENTED_CONTRACT_TESTED",
+          "nativeErrorBranches": "NOT_VERIFIED",
+          "implementationRecord": "designPipeline.asyncMutationGuards",
+          "buildPolicy": "Only build or reload after native writes have stopped at an acknowledged safe checkpoint."
+        },
+        "previousPause": {
+          "status": "PAUSED_PRECAUTION_QUOTA_CONFLICT",
+          "recordedAt": "2026-10-09T07:44:24Z",
+          "lastUserReportedRemainingPercent": 97,
+          "incidentalScreenshotRemainingPercent": 0,
+          "liveQuotaVerification": "NOT_VERIFIED_SURFACE_MISMATCH",
+          "generationCli": "EXITED",
+          "pending": null,
+          "checkpointApplied": 4750,
+          "checkpointAcknowledgedAt": "2026-10-09T07:32:18.598Z",
+          "checkpointReport": ".local/reports/2026-10-09-quota-pause-checkpoint.md"
+        },
+        "pauseAtWeeklyUsedPercent": 100,
+        "weeklyQuotaSnapshot": {
+          "usedPercent": 6,
+          "remainingPercent": 94,
+          "observedAt": null,
+          "source": "Parent newly read weekly remaining94% after user resumed; exact timestamp not supplied. Snapshot only."
+        },
+        "previousWeeklyThresholdPause": {
+          "observedAt": "2026-10-10T07:14:35.1770116Z",
+          "usedPercent": 100,
+          "remainingPercent": 0,
+          "status": "PAUSED_USER_REQUEST_WEEKLY_LIMIT",
+          "evidence": ".local/reports/2026-10-10-weekly-quota-pause.json"
+        }
+      },
+      "auditScope": "Original final seven-page structural audit PASS,writes0,errors[]. Twelve representative visual review FAIL. Full native structure backup container PASS; independent reimport,Present and delivery NOT_RUN. Prior incomplete-state audits preserved.",
+      "partialNativeBackup": {
+        "status": "PARTIAL_BACKUP_ONLY",
+        "createdAt": "2026-10-09T11:19:10.022Z",
+        "path": ".local/live/full55-v5-image-live-evidence/ArchiveLens-Full55-PARTIAL-before-flow-adoption-20261009.fig",
+        "bytes": 4032224,
+        "sha256": "d45c328d3c91d1aee58c60c42b8bfc952278f738a248406b8ddb88dd717a3a6d",
+        "independentSizeAndHashCheck": "PASS",
+        "evidence": ".local/reports/2026-10-09-partial-fig-backup.json",
+        "independentReimport": "NOT_RUN",
+        "scope": "Native local copy of partial failure state only; not complete55 export/reimport or delivery acceptance."
+      },
+      "nativeFlowConflict": {
+        "error": "DESIGN_NATIVE_FLOW_CHANGE_CONFLICT",
+        "uiObservation": "OBSERVED",
+        "uiObservationSource": "Parent agent actual Page16 UI observation.",
+        "uiObservedFlowNames": [
+          "Flow 1",
+          "Flow 2"
+        ],
+        "cause": "NOT_CONFIRMED",
+        "independentProbe": "OBSERVED_DISCONNECTED_AND_CONNECTED_COMPARISON",
+        "sourceReadback": {
+          "nodeId": "21:10855",
+          "collectedAt": "2026-10-09T11:02:07.935Z",
+          "status": "PASS",
+          "writes": 0,
+          "verification": "READ_ONLY_METADATA",
+          "flows": [
+            {
+              "name": "Flow 1",
+              "nodeId": "21:10324"
+            },
+            {
+              "name": "Flow 2",
+              "nodeId": "21:10319"
+            }
+          ],
+          "reactionTrigger": "ON_CLICK",
+          "reactionDestinationId": "21:10303",
+          "reactionMatchesExactSpec": "VERIFIED_BY_PARENT",
+          "cursor": 13193,
+          "finalizeCursor": 584,
+          "pendingFlowAfter": "NOT_RECORDED",
+          "pendingReactionReadback": "NOT_RECORDED",
+          "sourceReactionRecord": "MISSING",
+          "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.read-node.21%3A10855.1791543727935.json",
+          "scope": "Diagnostic metadata completeness only; existing reaction/flows do not replace durable success evidence or authorize old-pending adoption."
+        },
+        "guardBypass": false,
+        "pendingCleared": false,
+        "snapshotScope": "HISTORICAL_PRE_ADOPTION_DIAGNOSTIC",
+        "scope": "Historical pre-adoption main-run read-only metadata and small-probe comparison. Main-run original cause remains NOT_CONFIRMED; later exact current-state adoption is recorded separately and does not rewrite this snapshot. Final55 audit/export/reimport/visual/Present/delivery remain NOT_RUN."
+      },
+      "recoveryAudit": {
+        "status": "FAIL",
+        "writes": 0,
+        "nodes": 4250,
+        "paginationComplete": true,
+        "pending": null,
+        "errorCounts": {
+          "MISSING_NODE": 8943,
+          "REACTION_MISMATCH": 512,
+          "LAYER_ORDER_MISMATCH": 994,
+          "FLOW_MISMATCH": 1,
+          "DESIGN_NOT_COMPLETE": 1
+        },
+        "scope": "Read-only incomplete generation checkpoint, not final acceptance. No other audit errors.",
+        "evidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.audit.op-eb35be4a-ef28-43e3-bd0b-d765148cd6a7.json"
+      },
+      "transportIncident": {
+        "lastAcknowledgedBeforeRecovery": 4250,
+        "originalOperationIdPrefix": "op-0c42",
+        "originalOperationState": "OUTCOME_UNKNOWN",
+        "operationLookup": "AUDIT_FILE_MISMATCH",
+        "nativeRequestLogObservation": "Parent did not find the request; absence was not independently established and is not NOT_FOUND.",
+        "hotReloadAssociation": "INFERRED_ONLY: generated code changed before short disconnect/reconnect at2026-10-09T07:20:42Z; no host causal mechanism established.",
+        "explicitResume": "IN_PROGRESS",
+        "resumeOperationId": "op-d8965e73-1aae-4991-af2e-50491d940a45",
+        "resumeApplied": 4750,
+        "resumePending": null,
+        "resumeEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.reconcile.op-d8965e73-1aae-4991-af2e-50491d940a45.json"
+      },
+      "connectionInterruption": {
+        "status": "QUOTA_PAUSED_WITH_CONNECTION_RECOVERY_PENDING",
+        "snapshotScope": "HISTORICAL_2026_10_09_INTERRUPTION_AND_THRESHOLD_PAUSE",
+        "currentRecovery": "NEW_SESSION_CURRENT_STATE_VERIFIED_AND_NODES_COMPLETED",
+        "observedAt": "2026-10-09T14:49:27.951Z",
+        "evidence": ".local/reports/2026-10-09-full55-connection-interruption.json",
+        "unacknowledgedOperationId": "op-508f30dd-f800-4b6c-b62c-7b2d89db37e4",
+        "nativeOutcome": "NOT_VERIFIED",
+        "automaticRetry": false,
+        "cli": "QUIT_EXIT_0",
+        "quotaPause": {
+          "observedAt": "2026-10-09T14:51:25.862Z",
+          "fiveHourRemaining": 3,
+          "pauseThreshold": 3,
+          "reached": true
+        }
+      },
+      "completeNativeBackup": {
+        "status": "COMPLETE_STRUCTURE_BACKUP_VISUAL_FAIL",
+        "fileIdentity": {
+          "fileKey": "OzCxJpHmpEUTMflnnpL5VW"
+        },
+        "runId": "archivelens-full55-v5-image-live-20261009",
+        "specId": "archivelens-native-v5-image-live-20261009",
+        "method": "figma-save-local-copy",
+        "path": ".local/live/full55-v5-image-live-delivery-input/expected/ArchiveLens-Full55-v5-COMPLETE-structure-PASS-visual-FAIL-20261010.fig",
+        "bytes": 4335023,
+        "sha256": "1c136975fa47cff353139921b2f62015c787e8fafd256acfe44a4498347d5bd1",
+        "exportedAt": "2026-10-10T02:13:15.764Z",
+        "inspection": {
+          "status": "PASS",
+          "format": "figma-zip32",
+          "sha256": "1c136975fa47cff353139921b2f62015c787e8fafd256acfe44a4498347d5bd1",
+          "bytes": 4335023,
+          "entries": [
+            "canvas.fig",
+            "thumbnail.png",
+            "meta.json",
+            "images/",
+            "images/f6af94d6d0cb823e82bdba9783dd7daa3fcf207a",
+            "images/9a702680645d45716fca461e8678b7ebfd8607b3",
+            "images/cabe9ec04f55de2a8ea31d5f905be512bc76acb5",
+            "images/e5fb88973ce2bbeb2d090c2e39f9a9ebf7f61d1e",
+            "images/e936e0f3d1a4d4c647986216b4af8eab916a000f"
+          ],
+          "images": 5,
+          "thumbnail": {
+            "width": 226,
+            "height": 400
+          },
+          "scope": "Container, CRC, native canvas magic, metadata and thumbnail integrity only; Figma import and editability require separate live evidence."
+        },
+        "scope": "File-level export includes historical and probe pages. Structural verification applies to Page16/root21:10117 only.",
+        "originalAudit": ".local/live/full55-v5-image-live-delivery-input/expected/original-audit.json",
+        "visualReview": ".local/reports/2026-10-10-full55-native-visual-review.json",
+        "evidence": {
+          "path": ".local/live/full55-v5-image-live-delivery-input/expected/observations/complete-v5-save-dialog-20261010.png",
+          "sha256": "08eab88f939744d37462abdbe919d49cb1951a69288635f52aad78afc3e70bfd"
+        },
+        "independentReimport": "NOT_RUN",
+        "full55Present": "NOT_RUN",
+        "finalDelivery": "NOT_RUN",
+        "cliExitCode": 0,
+        "inspectionScope": "Container, CRC, native canvas magic, metadata and thumbnail integrity only; Figma import and editability require separate live evidence."
+      }
+    },
+    "nodeIdReadPrefetch": {
+      "implementation": "IMPLEMENTED_CONTRACT_TESTED",
+      "maximumConcurrentReadIds": 16,
+      "source": ".research/local-figma-bridge-poc/plugin/design-runtime.mjs",
+      "fullSuite": "PASS",
+      "fullSuiteTests": 229,
+      "fullSuiteEvidence": ".local/reports/2026-10-09-node-read-prefetch-full-tests.txt",
+      "runtimeTargetTests": 74,
+      "runtimeTargetStatus": "PASS_REPORTED_BY_PARENT",
+      "generatedPluginCheck": "PASS_REPORTED_BY_PARENT",
+      "doctor": "PASS_REPORTED_BY_PARENT",
+      "prefetchedContent": "Node references by recorded IDs within one operation; no attribute snapshots or concurrent setters.",
+      "orderedGuards": "All started reads drain before ordered failure/validation; scope,ownership,removed/type/master checks,fallback and all mutation/fresh readback order remain.",
+      "nativePluginReloadedAt": "2026-10-09T14:02:37Z",
+      "nativePairing": "REPORTED_BY_PARENT_SAME_PAGE16",
+      "nativeReadOnlyPlanMeasurement": "PLANNED",
+      "nativeReadOnlyPlanWrites": 0,
+      "nativeReadOnlyPlanLatencyMs": 53916,
+      "nativeFirstApply": {
+        "operationId": "op-4599e276-2ec4-418a-826e-f1b8981269ed",
+        "status": "IN_PROGRESS",
+        "latencyMs": 126612,
+        "finalizedNodes": 3084,
+        "pending": null,
+        "acknowledgedAt": "2026-10-09T14:06:54.104Z"
+      },
+      "nativeMeasurementEvidence": ".local/reports/2026-10-09-node-read-prefetch-native-verification.json",
+      "performanceConclusion": "NO_CLEAR_APPLY_SPEEDUP",
+      "priorThreeBatchApproximateSecondsRange": [
+        127,
+        153
+      ],
+      "nativeSpeedup": "NOT_VERIFIED",
+      "scope": "Bounded read concurrency contract plus one actual post-prefetch500-item finalization batch. First apply126.6s remains close to prior three batches about127-153s; no controlled speedup proof,no expanded concurrency or weakened guards. Batch,authorization,deadline and setter order unchanged."
+    },
+    "nativeEditorConnection": {
+      "connectionIssue": "OBSERVED",
+      "observationSource": "Parent actual Figma native UI observation; exact issue timestamp not supplied.",
+      "cloudSync": "NOT_VERIFIED",
+      "scope": "Local native receipts and contract tests do not establish cloud synchronization or remote persistence."
+    },
+    "nestedTimerProbe": {
+      "runId": "nested-timer-probe-v1-20261009",
+      "rootNodeId": "21:15374",
+      "generation": "COMPLETE",
+      "nodes": 5,
+      "audit": "PASS",
+      "auditAt": "2026-10-09T07:39:27.65Z",
+      "auditWrites": 0,
+      "auditEvidence": ".local/live/nested-timer-probe-v1-evidence/nested-timer-probe-v1-20261009.audit.op-5046269f-7aa7-46b7-b212-a68919a0f44e.json",
+      "present": "PASS",
+      "presentEvidence": ".local/reports/2026-10-09-resume-quota-timer.md",
+      "presentEvidenceType": "Actual native UI observations recorded by parent agent; screenshots directly displayed, not saved locally.",
+      "exactTiming": "NOT_MEASURED",
+      "nativeRoundTrip": "NOT_RUN",
+      "scope": "Five-node probe only: actual Present starting at top-levelA21:15375 automatically reached greenB21:15376 without manual navigation, observed again after restart. PASS covers automatic arrival on Figma126.9.13 with this seconds compatibility configuration; exact1s timing was not measured. Does not establish full55 playback or independent fig round-trip acceptance."
+    },
+    "paintAlphaCorrectedProbe": {
+      "runId": "paint-alpha-corrected-v2-20261009",
+      "generation": "COMPLETE",
+      "audit": "PASS",
+      "auditErrors": 0,
+      "nodes": 9,
+      "pngExport": "PASS",
+      "visual": "OBSERVED",
+      "nativeFigRoundTrip": "NOT_RUN"
+    },
+    "imageLifecycleProbe": {
+      "runId": "image-lifecycle-probe-v1-20261009",
+      "specId": "image-lifecycle-probe-v1-20261009",
+      "pageId": "21:10112",
+      "generation": "COMPLETE",
+      "nodes": 4,
+      "audit": "PASS",
+      "auditErrors": 0,
+      "pngExport": "PASS",
+      "pngSize": {
+        "width": 640,
+        "height": 400
+      },
+      "visual": "OBSERVED",
+      "visualScope": "Three images were visible in the directly viewed native PNG, using the same source bytes with immediate references. Does not establish long-term persistence, full55 acceptance or old-fill repair.",
+      "nativeFigRoundTrip": "NOT_RUN",
+      "evidenceDirectory": ".local/live/image-lifecycle-probe-v1-evidence/"
+    },
+    "previous55SceneRgbaFailure": {
+      "specId": "archivelens-native-v3-20261009",
+      "specSha256": "352d9acfd33e54f586ad5269cde21c10ba2e2224b4ca5ede32b2d579f52b926c",
+      "acceptance": "NOT_RUN",
+      "runId": "archivelens-full55-v3-20261009",
+      "generation": "PARTIAL_FAILURE",
+      "applied": 361,
+      "total": 13193,
+      "finalized": 0,
+      "audit": "FAIL",
+      "auditedNodes": 360,
+      "pendingNodeId": "19:869",
+      "failure": "Historical v3 failed opacity.4 ->1. Native probe confirmed host variable-alpha resolution; RGBA extraction repaired and9-node corrected probe PASS. Failed v3 preserved."
+    },
+    "previous55SceneImageFailure": {
+      "specId": "archivelens-native-v4-rgba-20261009",
+      "specSha256": "c16c06c3702f457b4173d34741273bbe034ee53a513c2f4db0d8312da17f6adf",
+      "specSha256Basis": "Raw input file bytes",
+      "serializedSpecSha256": "aafdc27714724cf06eaa61f73271547e65534e3d82263b25b6799462895e3579",
+      "runId": "archivelens-full55-v4-rgba-20261009",
+      "generation": "HALTED_CONFLICT",
+      "lastAcknowledgedApplied": 8500,
+      "total": 13193,
+      "lastAcknowledgedFinalized": 0,
+      "audit": "NOT_VERIFIED",
+      "acceptance": "NOT_RUN",
+      "failure": "DESIGN_USER_EDIT_CONFLICT:search/d129. A later read-node observed fills=[] where the immutable specification requires an IMAGE fill; the cause of the change is NOT_VERIFIED. No guard bypass or blind apply.",
+      "acknowledgedAt": "2026-10-09T03:21:57.077Z",
+      "checkpointEvidence": ".local/live/full55-v4-rgba-evidence/archivelens-full55-v4-rgba-20261009.apply.op-3746b945-8887-4fe5-9a26-685398ac5a9a.json",
+      "transportIncident": {
+        "operationId": "op-f06fdab4-3665-413c-85d8-95df73f54953",
+        "originalOperationState": "OUTCOME_UNKNOWN",
+        "readOnlyAuditedApplied": 6250,
+        "pending": null,
+        "auditStatus": "FAIL",
+        "auditScope": "Incomplete generation errors only; no ownership, digest or property guard conflicts; writes0.",
+        "auditEvidence": ".local/live/full55-v4-rgba-evidence/archivelens-full55-v4-rgba-20261009.audit.op-3be0c185-1dc2-4176-9aba-67bb08beca47.json",
+        "explicitResume": "IN_PROGRESS",
+        "resumeApplied": 6500,
+        "resumeEvidence": ".local/live/full55-v4-rgba-evidence/archivelens-full55-v4-rgba-20261009.reconcile.op-c6eaee8e-f9bd-4aae-bff2-620e473260b1.json"
+      },
+      "failedOperationId": "op-482f4ead-0c5d-4ebe-910c-2d6fc7915864",
+      "readbackEvidence": ".local/live/full55-v4-rgba-evidence/archivelens-full55-v4-rgba-20261009.read-node.20%3A10060.1791524397344.json",
+      "quotaPolicy": "User reported five-hour remaining97%; continue with pause threshold remaining3%. Live percentage unavailable in enabled tools.",
+      "imageLedgerReadback": {
+        "status": "PASS",
+        "scope": "Same-namespace metadata and synchronous getImageByHash lookups only; not image content or rendering validation.",
+        "imageValidity": "NOT_VERIFIED",
+        "firstObservation": {
+          "collectedAt": "2026-10-09T07:02:33.612Z",
+          "targetNodeId": "20:10060",
+          "fillsEmpty": true,
+          "handleExistsInLedgerOrder": [
+            true,
+            false,
+            false
+          ],
+          "evidence": ".local/live/full55-v4-rgba-evidence/archivelens-full55-v4-rgba-20261009.read-node.20%3A10060.1791529353612.json"
+        },
+        "afterIndependentResourceCreation": {
+          "collectedAt": "2026-10-09T07:06:00.401Z",
+          "fillsEmpty": true,
+          "handleExistsInLedgerOrder": [
+            true,
+            true,
+            true
+          ],
+          "evidence": ".local/live/image-lifecycle-probe-v1-evidence/image-lifecycle-probe-v1-20261009.read-node.20%3A10060.1791529560401.json"
+        },
+        "cause": "NOT_VERIFIED. Evidence supports only an inference that early-created, long-unreferenced image handles may expire; no garbage-collection mechanism or user edit is established.",
+        "preAssignmentHandleRepair": "IMPLEMENTED_CONTRACT_TESTED",
+        "oldFillRepair": "NOT_RUN",
+        "guardBypass": false,
+        "preAssignmentHandleRepairScope": "New-node setter boundaries only. 201 tests passed; native full55 and actual regeneration branch remain NOT_VERIFIED. Existing v4 empty fills unchanged."
+      }
+    },
+    "asyncMutationGuards": {
+      "implementation": "IMPLEMENTED_CONTRACT_TESTED",
+      "source": ".research/local-figma-bridge-poc/plugin/design-runtime.mjs",
+      "reviewEvidence": ".local/reports/2026-10-09-full55-guard-readonly-review.md",
+      "boundaries": [
+        "orderChildren entry rereads checkNode and checkReadback before ordering or fixed-count writes.",
+        "setReactionsAsync return rereads same-node checkNode and checkReadback before recording the reaction mutation.",
+        "setTextStyleIdAsync return rechecks node scope/ownership, original parent identity and parent scope/ownership before further new-node setters."
+      ],
+      "regressionScopes": [
+        "Later Frame numberOfFixedChildren user edit during an earlier node reaction await remains intact and blocks finalization.",
+        "Same-node geometry edit during reaction await blocks completion and preserves pending state.",
+        "New text node moved to another Page during style await receives no subsequent IMAGE fill."
+      ],
+      "red": {
+        "status": "FAIL",
+        "tests": 63,
+        "passed": 60,
+        "failed": 3,
+        "evidence": ".local/reports/2026-10-09-full55-guard-red.txt"
+      },
+      "green": {
+        "status": "PASS",
+        "tests": 63,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "evidence": ".local/reports/2026-10-09-full55-guard-green.txt"
+      },
+      "fullSuite": {
+        "status": "PASS",
+        "tests": 208,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "exitCode": 0,
+        "pretestBuild": "PASS",
+        "evidence": ".local/reports/2026-10-09-async-guard-final-tests.txt"
+      },
+      "generatedPluginCheck": "PASS",
+      "doctor": "PASS",
+      "supplementaryCheckSource": "Parent agent actual executions; delegated documentation agent did not build or test.",
+      "nativeErrorBranches": "NOT_VERIFIED",
+      "actualUserOverwrite": "NOT_VERIFIED",
+      "nativeNormalContinuation": "OBSERVED",
+      "nativeNormalContinuationScope": "Same-spec same-run native continuation after the7750 safe checkpoint reached all13193 created nodes and584 finalized before a separate native flow conflict; this is not error-branch or full55 acceptance.",
+      "nativeNormalContinuationEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.apply.op-0547021d-642d-4512-b640-ae5b4eb45d50.json",
+      "guardBypass": false,
+      "scope": "Deterministic contract regressions only; original spec/run/page/hash and failed historical pages remain unchanged. Does not establish full55 final audit, visual, Present or native fig round-trip acceptance."
+    },
+    "nativeFlowDiagnostics": {
+      "implementation": "IMPLEMENTED_CONTRACT_TESTED",
+      "scope": "Read-only prototypeState metadata and future reaction pending flowAfter/reactionReadback recording only. These diagnostics do not adopt old pending operations or establish full55 acceptance.",
+      "sources": [
+        ".research/local-figma-bridge-poc/plugin/code.js",
+        ".research/local-figma-bridge-poc/plugin/design-runtime.mjs"
+      ],
+      "fullSuite": {
+        "status": "PASS",
+        "tests": 214,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "exitCode": 0,
+        "pretestBuild": "PASS",
+        "evidence": ".local/reports/2026-10-09-native-flow-diagnostic-full-tests.txt"
+      },
+      "mainRunOldPending": {
+        "flowAfter": "NOT_RECORDED",
+        "reactionReadback": "NOT_RECORDED",
+        "sourceReactionRecord": "MISSING",
+        "adoption": "VERIFIED_ONLY_EXACT_CURRENT_STATE_NOT_ORIGIN",
+        "scope": "Original failed operation lacked flowAfter,reactionReadback and source success record; these were not backfilled. Later explicit current-state adoption is independently verified with a new reaction record and preserved legacy identity."
+      },
+      "futurePendingRecording": {
+        "nativeObservation": "OBSERVED",
+        "flowAfter": "RECORDED",
+        "reactionReadback": "RECORDED",
+        "scope": "New Page18 disconnected-probe pending only; no backfilled success record for the older main-run pending."
+      },
+      "subsequentV2Support": {
+        "implementation": "IMPLEMENTED_CONTRACT_TESTED",
+        "fullSuite": "PASS",
+        "fullSuiteTests": 223,
+        "fullSuiteEvidence": ".local/reports/2026-10-09-native-flow-v2-final-tests.txt",
+        "generatedPluginCheck": "PASS",
+        "runtimeTargetTests": 71,
+        "mainTargetTests": 25,
+        "nativeValidation": "PASS",
+        "nativeValidationScope": "Independent Page20 six-node disconnected-chain v2 normal path only:COMPLETE,6 finalized,pendingnull,audit PASS with0 errors and2 flows. No native adoption or full55 acceptance.",
+        "oldPendingAdoption": "VERIFIED_ONLY_EXACT_CURRENT_STATE_NOT_ORIGIN",
+        "publicApiCliBoundary": "IMPLEMENTED_CONTRACT_TESTED",
+        "publicApiCliBoundaryFullSuite": "PASS",
+        "publicApiCliBoundaryFullSuiteTests": 226,
+        "publicApiCliBoundaryFullSuiteEvidence": ".local/reports/2026-10-09-flow-api-resume-full-tests.txt",
+        "publicApiCliBoundarySources": [
+          ".research/local-figma-bridge-poc/design/commands.mjs",
+          ".research/local-figma-bridge-poc/mcp/server.mjs",
+          ".research/local-figma-bridge-poc/scripts/workflow.mjs"
+        ],
+        "publicApiCliBoundaryPolicy": "Exactly3 fields pendingOperationId,flowSnapshotSignature,reactionSnapshotSignature; scope_design_apply plus reconcile=true only. CLI forwards only an explicit reconcile request,not configuration or defaults. Existing input,authorization and unknown-outcome guards remain; new request operation ID differs from the old pending target. Successful adoption continues ordinary work in the configured batch.",
+        "strictReceiptPolicy": "Full before list unchanged plus exactly one terminal Flow n append on current task-owned reaction source top frame; chain and completed reaction receipt are revalidated,foreign flows retained,renames/deletes/extra edits rejected,v1 first-flow evidence compatible.",
+        "explicitAdoptionRuntimePolicy": "Apply+reconcile only,exact pending operation ID and current flow/reaction signatures; records EXPLICIT_READBACK_ADOPTION and CURRENT_STATE_ADOPTED_NOT_ORIGIN_PROVED,retains legacyPending and does not fabricate original setter receipt.",
+        "scope": "223 preserves the runtime/main v2 contract snapshot;226 verifies the completed public API/CLI boundary. Ordinary native v2 PASS is limited to the six-node Page20 probe. Main-run exact approved current-state adoption is independently verified without proving original setter origin; generation remains IN_PROGRESS and all final55 gates remain NOT_RUN."
+      }
+    },
+    "nativeFlowProbes": {
+      "disconnected": {
+        "runId": "native-flow-disconnected-probe-v1-20261009",
+        "pageId": "22:24192",
+        "generation": "PARTIAL_FAILURE",
+        "applied": 6,
+        "total": 6,
+        "finalizedNodes": 5,
+        "error": "DESIGN_NATIVE_FLOW_CHANGE_CONFLICT",
+        "pendingKey": "C/c",
+        "applyAcknowledgedAt": "2026-10-09T11:06:46.217Z",
+        "applyEvidence": ".local/probes/native-flow-disconnected-probe-v1-evidence/native-flow-disconnected-probe-v1-20261009.apply.op-85c3e5e2-df98-4b39-afa0-7e0c203037a3.json",
+        "readbackAt": "2026-10-09T11:06:46.230Z",
+        "readbackEvidence": ".local/probes/native-flow-disconnected-probe-v1-evidence/native-flow-disconnected-probe-v1-20261009.read-node.22%3A24198.1791544006230.json",
+        "flowBefore": [
+          {
+            "name": "Flow 1",
+            "nodeKey": "A",
+            "nodeId": "22:24193"
+          }
+        ],
+        "flowAfter": [
+          {
+            "name": "Flow 1",
+            "nodeKey": "A",
+            "nodeId": "22:24193"
+          },
+          {
+            "name": "Flow 2",
+            "nodeKey": "C",
+            "nodeId": "22:24195"
+          }
+        ],
+        "pendingFlowAfter": "RECORDED",
+        "pendingReactionReadback": "RECORDED",
+        "sourceReactionRecord": "MISSING",
+        "conflictReproduction": "OBSERVED",
+        "scope": "Actual native disconnected-chain Flow2 addition reproduced on this host. Generation remains PARTIAL_FAILURE; this does not prove the historical full55 change was caused by the host."
+      },
+      "disconnectedV2": {
+        "runId": "native-flow-disconnected-probe-v2-20261009",
+        "pageId": "24:24210",
+        "generation": "COMPLETE",
+        "applied": 6,
+        "total": 6,
+        "finalizedNodes": 6,
+        "pending": null,
+        "applyAcknowledgedAt": "2026-10-09T12:31:25.115Z",
+        "applyEvidence": ".local/probes/native-flow-disconnected-probe-v2-evidence/native-flow-disconnected-probe-v2-20261009.apply.op-dd4db2ae-8ee8-474e-9d92-8b0fde5a7a42.json",
+        "audit": "PASS",
+        "auditErrors": 0,
+        "auditWrites": 0,
+        "auditAcknowledgedAt": "2026-10-09T12:31:31.509Z",
+        "counts": {
+          "nodes": 6,
+          "reactions": 2,
+          "flows": 2
+        },
+        "auditEvidence": ".local/probes/native-flow-disconnected-probe-v2-evidence/native-flow-disconnected-probe-v2-20261009.audit.op-c3535bf4-e33a-4acd-a489-f1609af3f35d.json",
+        "readbackAt": "2026-10-09T12:31:53.838Z",
+        "readbackEvidence": ".local/probes/native-flow-disconnected-probe-v2-evidence/native-flow-disconnected-probe-v2-20261009.read-node.25%3A24216.1791549113838.json",
+        "sourceKey": "C/c",
+        "sourceId": "25:24216",
+        "nativeFlowObservationVersion": 2,
+        "provenance": "NATIVE_SETTER_READBACK",
+        "sourceReactionRecord": "PRESENT",
+        "originalSetterReactionReadback": "RECORDED",
+        "metadataChainVerification": "NOT_VERIFIED_METADATA_ONLY",
+        "playback": "NOT_VERIFIED",
+        "explicitAdoption": "NOT_RUN",
+        "scope": "Independent six-node Page20 normal v2 disconnected-chain generation and complete zero-write audit. Real setter receipt recorded; not an adoption operation,full55 acceptance or native fig round-trip."
+      },
+      "connected": {
+        "runId": "native-flow-connected-probe-v1-20261009",
+        "pageId": "22:24201",
+        "generation": "COMPLETE",
+        "applied": 6,
+        "total": 6,
+        "finalizedNodes": 6,
+        "pending": null,
+        "audit": "PASS",
+        "auditErrors": 0,
+        "auditWrites": 0,
+        "auditAcknowledgedAt": "2026-10-09T11:10:04.695Z",
+        "counts": {
+          "nodes": 6,
+          "reactions": 2,
+          "flows": 1
+        },
+        "auditEvidence": ".local/probes/native-flow-connected-probe-v1-evidence/native-flow-connected-probe-v1-20261009.audit.op-2a2704b3-d6c9-4d96-b665-4da10e0c21c3.json",
+        "playback": "NOT_VERIFIED",
+        "scope": "Six-node connected-chain generation and zero-write structural audit only; not full55 playback, final audit or native fig round-trip acceptance."
+      }
+    },
+    "batchSizeContract": {
+      "default": 100,
+      "minimum": 1,
+      "maximum": 500,
+      "implementation": "IMPLEMENTED_CONTRACT_TESTED",
+      "testLog": ".local/reports/2026-10-09-batch-500-final-tests.txt",
+      "native500Batch": "PASS",
+      "scope": "Normalization, MCP schema and runtime agree. Creation and finalization share the budget; all guards and180000ms deadline remain. Current v5 configuration500; initial250 evidence is preserved in the dated report and recovery audit.",
+      "native500BatchScope": "One actual reconcile batch4250->4750 at2026-10-09T07:32:18.598Z,latency39787ms,pendingnull. Not full-generation or constant performance guarantee.",
+      "native500BatchEvidence": ".local/live/full55-v5-image-live-evidence/archivelens-full55-v5-image-live-20261009.reconcile.op-d8965e73-1aae-4991-af2e-50491d940a45.json"
+    },
+    "captureFidelityOptions": {
+      "implementation": "IMPLEMENTED_CONTRACT_TESTED",
+      "sources": [
+        ".research/local-figma-bridge-poc/capture/adapter.mjs",
+        ".research/local-figma-bridge-poc/capture/cli.mjs",
+        ".research/local-figma-bridge-poc/capture/archive-html.mjs",
+        ".research/local-figma-bridge-poc/capture/dom-capture.mjs",
+        ".research/local-figma-bridge-poc/design/enrich.mjs",
+        ".research/local-figma-bridge-poc/capture/inline-text.mjs",
+        ".research/local-figma-bridge-poc/design/text-fit.mjs",
+        ".research/local-figma-bridge-poc/plugin/code.js"
+      ],
+      "textBounds": {
+        "default": "tight-range",
+        "optIn": "single-block-content",
+        "scope": "Safe single direct text child of block only; finite content boundaries,left/start normal or pre-wrap,no transforms/unknown boundaries/occupying sibling subtree. Changes width only; does not solve inline siblings,nowrap,parent allocation or full reflow."
+      },
+      "paintOrder": {
+        "default": "captured",
+        "optIn": "positioned-siblings",
+        "scope": "Bounded same-parent positioned branches; additionally exactly two flex element branches:positive safe-integer explicit zIndex absolute overlay after one static branch whose complete subtree has explicit auto zIndex,none transform,opacity1 and no competing composition. Preserve geometry,keys,parents,reactions. Missing is not auto; provenance must match. Not general CSS cascade/stacking."
+      },
+      "nativeControls": {
+        "default": "captured",
+        "optIn": "sampled",
+        "sourceEvidence": ".local/reports/2026-10-10-native-control-source-support.json",
+        "sourceProgress": 4,
+        "sourceClosedDetails": 18,
+        "scope": "Strict CAPTURED or matching HTML_ATTRIBUTE_DERIVED/STATIC_CSS_DERIVED sources; unknown/conflicting evidence remains UNKNOWN. Determinate progress ratio+accent can create fill; track/marker/animation UNKNOWN. Closed details retains logical keys,reactions,geometry with hidden descendants. No auto interaction.",
+        "nativeVisual": "NOT_RUN",
+        "targetTests": 94,
+        "targetLog": ".local/reports/2026-10-10-native-controls-target-green-v2.txt",
+        "sourceClosureTests": 29,
+        "sourceClosureRedLog": ".local/reports/2026-10-10-accent-source-closure-red.txt",
+        "sourceClosureGreenLog": ".local/reports/2026-10-10-accent-source-closure-green.txt"
+      },
+      "exactExtractionVisibility": {
+        "status": "PASS",
+        "policy": "Preserve explicit visible including false on original vector-to-instance key; absent remains absent.",
+        "redLog": ".local/reports/2026-10-10-enrich-visibility-red.txt",
+        "greenLog": ".local/reports/2026-10-10-enrich-visibility-green.txt",
+        "tests": 7
+      },
+      "earlierExecutionSnapshot": {
+        "source": "PARENT_ACTUAL_EXECUTION_REPORT_NO_SAVED_LOG",
+        "targetTests": 52,
+        "textExpansions": 844,
+        "changedPaintParents": 0,
+        "scope": "Earlier raw55 conversion and direct target run only; does not describe every later candidate or replace final fullsuite."
+      },
+      "fullSuite": {
+        "status": "PASS",
+        "tests": 305,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "pretestBuild": "PASS",
+        "evidence": ".local/reports/2026-10-10-inline-text-full-test.txt",
+        "scope": "Historical305-item full-suite snapshot before2026-10-11 text-layout/typography/float32 work. Actual log directly inspected; no docs-agent test run."
+      },
+      "correctedFull55Native": "GENERATION_COMPLETE_AUDIT_PASS_EXPORT_PASS_ACCEPTANCE_PENDING",
+      "previousFullSuite": {
+        "status": "PASS",
+        "tests": 290,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "exitCode": 0,
+        "pretestBuild": "PASS",
+        "evidence": ".local/reports/2026-10-10-source-fidelity-full-test.txt",
+        "sourceGeneratedParity": "PASS_REPORTED_BY_PARENT",
+        "doctor": "PASS_SIX_CHECKS_REPORTED_BY_PARENT"
+      },
+      "inlineText": {
+        "default": "captured",
+        "optIn": "uniform-run",
+        "source": ".research/local-figma-bridge-poc/capture/inline-text.mjs",
+        "cli": "--inline-text captured|uniform-run",
+        "scope": "2–16 uniform measured contiguous same-line direct TEXT children in proven block bounds only. Parent and direct fragments require transform none; ancestors allow none or exact finite computed2D translation matrix(1,0,0,1,e,f),already included in capture coordinates. Reject uncomputed/scale/rotate/skew/perspective transforms,scroll,nested/different styles,ordinary-space collapsing across fragments,unknown/occupied boundaries and reaction/unchanged-preset sources.",
+        "editing": "First original text key contains the complete run; later original keys/text remain hidden. Hidden-fragment edits do not auto-update the visible run.",
+        "manifest": "inlineText changedCount,hiddenFragmentCount,runs,previous,sourceIds,hiddenKeys,preservedCounts,nativeFit",
+        "nativeFit": "NOT_RUN",
+        "targetTests": 54,
+        "targetEvidence": ".local/reports/2026-10-10-inline-text-target-green.txt",
+        "approval": "USER_EXPLICIT_UNIFORM_RUN_AND_READABILITY_OPERABILITY_ACCEPTANCE_RELAYED_BY_PARENT"
+      },
+      "textLayoutFullSuite": {
+        "status": "PASS",
+        "tests": 372,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "pretestBuild": "PASS",
+        "evidence": ".local/reports/2026-10-11-text-layout-float32-full-test.txt",
+        "earlier360Evidence": ".local/reports/2026-10-11-text-layout-full-test.txt",
+        "scope": "Latest actual full log directly inspected after float32 fontsize and numeric lineHeight followup; no docs-agent rerun. Contract tests do not prove native visual or delivery."
+      },
+      "textTypographyReadback": {
+        "status": "IMPLEMENTED_CONTRACT_TESTED",
+        "source": ".research/local-figma-bridge-poc/plugin/code.js",
+        "fields": [
+          "fontName",
+          "fontSize",
+          "lineHeight",
+          "letterSpacing",
+          "textAutoResize",
+          "hasMissingFont",
+          "textAlignHorizontal"
+        ],
+        "fieldStates": [
+          "PASS",
+          "MIXED",
+          "NOT_VERIFIED_UNSUPPORTED",
+          "NOT_VERIFIED_INVALID",
+          "NOT_VERIFIED_READ_ERROR"
+        ],
+        "scope": "Actual read-only values; unsupported/mixed/invalid/unreadable values are explicit markers,never fabricated defaults. No font loading,measurement,node mutation,ownership change or retry.",
+        "redLog": ".local/reports/2026-10-11-typography-readback-red.txt",
+        "greenLog": ".local/reports/2026-10-11-typography-readback-green.txt",
+        "greenTests": 28
+      },
+      "measuredSingleLineTextFit": {
+        "status": "IMPLEMENTED_CONTRACT_TESTED",
+        "source": ".research/local-figma-bridge-poc/design/text-fit.mjs",
+        "api": "fitMeasuredSingleLineText(spec,{candidates,measurements,minimumScale})",
+        "defaultPipeline": false,
+        "cliOption": false,
+        "designSpecField": false,
+        "applyOption": false,
+        "callBefore": "enrich",
+        "minimumScale": 0.8,
+        "allowedMinimumScale": [
+          0.8,
+          1
+        ],
+        "scope": "Source-proven full single-line visible fixed NONE TEXT whose complete source range fits content bounds; exact characters,source size/height,zero spacing,no shared textStyleKey. One provenance-backed natural WIDTH_AND_HEIGHT sample with two raw-identical native reads and hasMissingFont false. Requested vs measured fontSize and numeric lineHeight may match float32 representation; preserve both original values and strict raw double-read equality. Only per-node fontSize changes; no geometry,characters,lineHeight,resources,sibling or reaction changes. Already clipped/multiline/unsupported/unstable/missing evidence is preserved.",
+        "rounding": "floor destination width,ceil native natural width,floor fitted fontSize to six decimals; reject below minimumScale or0.1 fontSize",
+        "latestTextFitTests": 45,
+        "historical38TargetEvidence": ".local/reports/2026-10-11-text-fit-float32-final-green.txt",
+        "latestFullSuiteEvidence": ".local/reports/2026-10-11-text-layout-float32-full-test.txt",
+        "nativeVisual": "NOT_RUN",
+        "verticalFit": "NOT_RUN"
+      }
+    },
+    "nativeFontProbe": {
+      "evidence": ".local/reports/2026-10-10-native-font-probe.json",
+      "status": "NATIVE_PROBE_COMPLETE_AUDIT_PASS",
+      "nodes": 8,
+      "nativeStyles": {
+        "Regular": 400,
+        "Medium": 500,
+        "Bold": 700
+      },
+      "unavailableRequestedSpellings": [
+        "SemiBold",
+        "Semi Bold"
+      ],
+      "fallback": "Regular400",
+      "visual": "OBSERVED_READABLE_SAMPLE_ONLY",
+      "full55Fit": "NOT_RUN"
+    },
+    "nativeSourceBoundsProbe": {
+      "evidence": ".local/reports/2026-10-10-native-source-bounds-probe.json",
+      "status": "NATIVE_SOURCE_BOUNDS_PROBE_PASS_WITH_LIMITS",
+      "nodes": 16,
+      "audit": "PASS",
+      "pngExport": "PASS",
+      "observations": "Three expanded exact-source texts fit one line; two-line control retained; three unchanged inline fragments matched in this sample.",
+      "scope": "Flattened comparison only; original parent clipping,full scene,other fonts/texts NOT_RUN. Old full55 v5 visual FAIL remains."
+    },
+    "prepared55SceneCandidate": {
+      "status": "GENERATED_NATIVE_AUDIT_PASS_EXPORT_PASS_ACCEPTANCE_PENDING",
+      "preparedAt": "2026-10-10T19:23:55.376Z",
+      "specId": "archivelens-native-v10-sourceproof-20261011",
+      "specPath": ".local/archivelens-derived-v10-sourceproof-20261011/converted/design-spec.json",
+      "evidence": ".local/archivelens-derived-v10-sourceproof-20261011/derivation-verification.json",
+      "specSha256": "08711ce1c1eedf7303f2d3681c8ecea10729e01719c053d07fc02abf3874602e",
+      "counts": {
+        "nodes": 13197,
+        "rawNodes": 13131,
+        "texts": 4170,
+        "scenes": 55,
+        "components": 33,
+        "instances": 713,
+        "reactions": 739,
+        "flows": 2,
+        "textStyles": 109,
+        "variables": 102
+      },
+      "nativeTextFit": {
+        "changedCount": 418,
+        "unchangedCount": 1789,
+        "preservedCount": 37,
+        "reportPath": "converted/native-text-fit-report.json",
+        "nativeVisual": "NOT_RUN",
+        "verticalFit": "NOT_RUN"
+      },
+      "localWidthProof": ".local/archivelens-derived-v10-sourceproof-20261011/converted/local-text-width-sourceproof.json",
+      "nativeGeneration": "COMPLETE",
+      "nativeAudit": "PASS",
+      "nativeVisual": "NOT_RUN",
+      "present": "NOT_RUN",
+      "independentReimport": "NOT_RUN",
+      "deliveryGate": "NOT_RUN",
+      "scope": "v10 full55 native generation and structural audit PASS;55 original PNG file checks and native.fig export/container PASS. Full55 historical visual QA/Present/independent reimport/final delivery NOT_RUN.",
+      "countsBasis": "NATIVE_AUDITED_COUNTS_PLUS_SPEC_RAW_AND_SCENE_COUNTS",
+      "liveRunId": "archivelens-full55-v10-sourceproof-20261011",
+      "verifiedCounts": {
+        "nodes": 13197,
+        "texts": 4170,
+        "components": 33,
+        "instances": 713,
+        "reactions": 739,
+        "flows": 2,
+        "textStyles": 109,
+        "variables": 102
+      }
+    },
+    "previousV8Prepared55SceneCandidate": {
+      "status": "PREPARED_NATIVE_NOT_RUN",
+      "preparedAt": "2026-10-10T19:08:13.387Z",
+      "specId": "archivelens-native-v8-layout-20261011",
+      "specPath": ".local/archivelens-derived-v8-layout-20261011/converted/design-spec.json",
+      "evidence": ".local/archivelens-derived-v8-layout-20261011/derivation-verification.json",
+      "specSha256": "749747f5f5f41ccb7b2756ae093bf44b5ac27ddeba0590bdd024b74f3c8f471d",
+      "priorSpecSha256": "0f560dd21dd4ffc64c259ba32741b60b2501d4d5d5698cffc398de76afc36fcd",
+      "sourceParity": "PASS",
+      "assetParity": "PASS",
+      "reactionParity": "PASS",
+      "flowParity": "PASS",
+      "counts": {
+        "nodes": 13197,
+        "texts": 4170,
+        "components": 33,
+        "instances": 713,
+        "reactions": 739,
+        "flows": 2,
+        "textStyles": 48,
+        "variables": 102
+      },
+      "sourceScenes": 55,
+      "sourceCollectionSha256": "f903ce2f7027a668c29bf2f0727d35b7298c9a03e81c62b5fd5890e38c18ab3d",
+      "positionerSupplements": 14,
+      "positionerSource": "STATIC_CSS_DERIVED_FIXED_ARCHIVE_PROOF_NOT_GENERAL_PARSER_OR_FRESH_COMPUTED_STYLE",
+      "textBounds": {
+        "expandedCount": 844
+      },
+      "paintOrder": {
+        "changedParentCount": 16,
+        "searchFlexChanges": 2
+      },
+      "nativeControls": {
+        "progressFillCount": 4,
+        "closedDetailsCount": 18,
+        "hiddenNodeCount": 307
+      },
+      "fontSubstitutionCount": 3974,
+      "nativeGeneration": "NOT_RUN",
+      "nativeAudit": "NOT_RUN",
+      "nativeVisual": "NOT_RUN",
+      "present": "NOT_RUN",
+      "independentReimport": "NOT_RUN",
+      "deliveryGate": "NOT_RUN",
+      "limitations": [
+        "Historical derived capture, not fresh application capture",
+        "Font family and weight differences remain",
+        "Native progress track/animation and details marker UNKNOWN",
+        "Source corrections have not passed full native visual/playback/reimport verification"
+      ],
+      "scope": "Prepared v8 full55 historical-source layout candidate only; no corrected native full55 success.286 merged runs/597 hidden inline fragments are stage counts,not a summed final union with307 details-hidden nodes. Source/font measurements and typography helper are separate from this candidate; no measured textfit applied yet. Original v5 remains unchanged,COMPLETE13193,structurePASS,visualFAIL.",
+      "inlineText": {
+        "mode": "uniform-run",
+        "changedCount": 286,
+        "hiddenFragmentCount": 597,
+        "nativeFit": "NOT_RUN"
+      },
+      "priorV7SpecSha256": "6a5d710f402842f0e003819055cb6fcda6d5a37a02ef759677049df8fddd8005",
+      "searchStaticFlowSupplements": 8,
+      "searchStaticFlowEvidence": ".local/reports/2026-10-11-search-static-flow-source-closure.json"
+    },
+    "previousV7Prepared55SceneCandidate": {
+      "status": "PREPARED_NATIVE_NOT_RUN",
+      "preparedAt": "2026-10-10T07:13:40.354Z",
+      "specId": "archivelens-native-v7-inline-20261010",
+      "specPath": ".local/archivelens-derived-v7-inline-20261010/converted/design-spec.json",
+      "evidence": ".local/archivelens-derived-v7-inline-20261010/derivation-verification.json",
+      "specSha256": "6a5d710f402842f0e003819055cb6fcda6d5a37a02ef759677049df8fddd8005",
+      "priorSpecSha256": "0f560dd21dd4ffc64c259ba32741b60b2501d4d5d5698cffc398de76afc36fcd",
+      "sourceParity": "PASS",
+      "assetParity": "PASS",
+      "reactionParity": "PASS",
+      "flowParity": "PASS",
+      "counts": {
+        "nodes": 13197,
+        "texts": 4170,
+        "components": 33,
+        "instances": 713,
+        "reactions": 739,
+        "flows": 2,
+        "textStyles": 48,
+        "variables": 102
+      },
+      "sourceScenes": 55,
+      "sourceCollectionSha256": "f903ce2f7027a668c29bf2f0727d35b7298c9a03e81c62b5fd5890e38c18ab3d",
+      "positionerSupplements": 14,
+      "positionerSource": "STATIC_CSS_DERIVED_FIXED_ARCHIVE_PROOF_NOT_GENERAL_PARSER_OR_FRESH_COMPUTED_STYLE",
+      "textBounds": {
+        "expandedCount": 844
+      },
+      "paintOrder": {
+        "changedParentCount": 14
+      },
+      "nativeControls": {
+        "progressFillCount": 4,
+        "closedDetailsCount": 18,
+        "hiddenNodeCount": 307
+      },
+      "fontSubstitutionCount": 3974,
+      "nativeGeneration": "NOT_RUN",
+      "nativeAudit": "NOT_RUN",
+      "nativeVisual": "NOT_RUN",
+      "present": "NOT_RUN",
+      "independentReimport": "NOT_RUN",
+      "deliveryGate": "NOT_RUN",
+      "limitations": [
+        "Historical derived capture, not fresh application capture",
+        "Font family and weight differences remain",
+        "Native progress track/animation and details marker UNKNOWN",
+        "Source corrections have not passed full native visual/playback/reimport verification"
+      ],
+      "scope": "Prepared v7 full55 historical-source candidate only; no native success. 417 inline hidden fragments are a conversion-stage count,not an independently verified sum with307 details-hidden nodes. Original v5 unchanged; separate v6 five-scene probe visual FAIL.",
+      "inlineText": {
+        "mode": "uniform-run",
+        "changedCount": 238,
+        "hiddenFragmentCount": 417,
+        "preservedCounts": {
+          "NOT_SINGLE_LINE_DIRECT_TEXT": 274,
+          "PARENT_LAYOUT_UNSUPPORTED": 99,
+          "COMPOSITION_UNSUPPORTED": 48,
+          "MEASURED_RUN_NOT_CONTIGUOUS": 7
+        },
+        "nativeFit": "NOT_RUN"
+      }
+    },
+    "nativeV6FiveSceneProbe": {
+      "status": "PARTIAL_FIXES_OBSERVED_VISUAL_FAIL",
+      "evidence": ".local/reports/2026-10-10-native-fidelity-scene-probe.json",
+      "pageId": "43:741",
+      "nodes": 1462,
+      "generation": "COMPLETE",
+      "audit": "PASS",
+      "pngExport": "PASS",
+      "pngs": 5,
+      "visual": "FAIL",
+      "reviewed": 5,
+      "planned": 5,
+      "reactions": 0,
+      "flows": 0,
+      "scope": "Partial text/toolbar/progress/details improvements observed; remaining inline/header/notes/search-toolbar defects. Five scene trees only,no original full739 reactions or flows. Full55 and Present/reimport NOT_RUN."
+    },
+    "nativeV7FiveSceneProbe": {
+      "status": "PARTIAL_FIXES_OBSERVED_VISUAL_FAIL",
+      "evidence": ".local/reports/2026-10-10-native-inline-fidelity-probe.json",
+      "pageId": "44:88",
+      "nodes": 1462,
+      "generation": "COMPLETE",
+      "audit": "PASS",
+      "auditWrites": 0,
+      "pngExport": "PASS",
+      "pngs": 5,
+      "visual": "FAIL",
+      "reviewed": 5,
+      "planned": 5,
+      "reactions": 0,
+      "flows": 0,
+      "scope": "Zoom61%/49% readable improvement observed. Page/count/header/notes and search overlay issues remain. Five scene trees only,no complete739 reactions or flows. Historical compact search default wrapping and bottom clipping preexist; notes useArial. Full55 corrected Present/reimport NOT_RUN."
+    },
+    "nativeTextMetricsProbe": {
+      "status": "VERIFIED_STABLE_LOCAL_MEASUREMENTS",
+      "sourceDiagnosis": ".local/reports/2026-10-11-textfit-source-diagnosis.json",
+      "firstProbe": {
+        "pageId": "47:88",
+        "applied": 500,
+        "total": 703,
+        "texts": 499,
+        "generation": "PARTIAL_FAILURE",
+        "failure": "DESIGN_USER_EDIT_CONFLICT:metric/ddea9c67b9746f8aac09fcb8",
+        "evidenceDirectory": ".local/live/native-text-metrics-evidence-v2-20261011",
+        "conflictPreserved": true,
+        "retried": false,
+        "adopted": false,
+        "guardBypass": false
+      },
+      "remainingProbe": {
+        "pageId": "50:589",
+        "rootNodeId": "50:590",
+        "nodes": 204,
+        "texts": 203,
+        "generation": "COMPLETE",
+        "finalized": true,
+        "pending": null,
+        "evidence": ".local/live/native-text-metrics-evidence-remaining-20261011/archivelens-native-text-metrics-remaining-20261011.apply.op-81f24867-6ce4-40f1-938d-8d000e9fd05b.json",
+        "readEvidenceDirectory": ".local/live/native-text-metrics-evidence-remaining-20261011"
+      },
+      "uniqueTypographyStrings": 702,
+      "doubleRead": "VERIFIED_702_RAW_IDENTICAL_SNAPSHOTS",
+      "strictAggregation": "PASS",
+      "designAudit": "NOT_RUN_OR_NOT_COMPLETE",
+      "nativeVisual": "NOT_RUN",
+      "scope": "Actual natural width/height and complete typography from702 raw-stable double reads. Requested values and raw native snapshots retained separately. No whole-design audit,vertical fit,visual,Present/export/reimport acceptance; old47:88 conflict remains preserved without replay/adoption/guard weakening.",
+      "evidence": ".local/reports/2026-10-11-native-text-metrics-readback.json",
+      "sha256": "242a8cec3df1e702a9d39cb4d43292c0743b28d85fd1d490347066fc0e4eb021",
+      "summary": {
+        "requested": 702,
+        "measured": 702,
+        "stableRawSnapshots": 702,
+        "missing": 0,
+        "errors": 0
+      },
+      "nativeFit": "NOT_RUN"
+    },
+    "nativeV9FiveSceneProbe": {
+      "status": "PARTIAL_FIXES_OBSERVED_VISUAL_FAIL",
+      "evidence": ".local/reports/2026-10-11-native-textfit-fidelity-probe.json",
+      "pageId": "50:794",
+      "nodes": 1462,
+      "generation": "COMPLETE",
+      "generationEvidence": ".local/live/textfit-fidelity-probe-evidence-20261011/archivelens-textfit-fidelity-probe-20261011.apply.op-d8565f3c-cf65-4040-a4c2-142c838b0a90.json",
+      "audit": "PASS",
+      "auditWrites": 0,
+      "auditEvidence": ".local/live/textfit-fidelity-probe-evidence-20261011/archivelens-textfit-fidelity-probe-20261011.audit.op-ec32a8f7-c893-4539-877a-fa45b0ab03bb.json",
+      "pngExport": "PASS",
+      "pngs": 5,
+      "pngHashAndDimensions": "PASS_INDEPENDENTLY_VERIFIED",
+      "visual": "FAIL_REPORTED_BY_PARENT_DIRECT_FIVE_IMAGE_VIEW",
+      "reactions": 0,
+      "flows": 0,
+      "scope": "Direct receipts verify1462create/finalize COMPLETE,auditPASS/writes0/errors[],and5actual PNG hash/dimensions. Parent saved direct five-image review observed pagination/current page/confidence/header count/search toolbar/compact description improvements; review task title,drawer notes/add-note and default search description remain defective. Docs delegate did not perform a new visual review. Separate from full55 candidate; no complete739 reactions/flows,Present/reimport acceptance. v10 source proof remains SOURCE_PLAN/PREPARED only,no native result."
+    },
+    "previousPrepared55SceneCandidate": {
+      "status": "PREPARED_NATIVE_NOT_RUN",
+      "preparedAt": "2026-10-10T06:52:29.785Z",
+      "specId": "archivelens-native-v6-fidelity-20261010",
+      "specPath": ".local/archivelens-derived-v6-fidelity-20261010/converted/design-spec.json",
+      "evidence": ".local/archivelens-derived-v6-fidelity-20261010/derivation-verification.json",
+      "specSha256": "9ab11fc40e2f62817cb876195f65d6311a86808547bef383344d13fccdfe8514",
+      "priorSpecSha256": "0f560dd21dd4ffc64c259ba32741b60b2501d4d5d5698cffc398de76afc36fcd",
+      "sourceParity": "PASS",
+      "assetParity": "PASS",
+      "reactionParity": "PASS",
+      "flowParity": "PASS",
+      "counts": {
+        "nodes": 13197,
+        "texts": 4170,
+        "components": 33,
+        "instances": 713,
+        "reactions": 739,
+        "flows": 2,
+        "textStyles": 48,
+        "variables": 102
+      },
+      "sourceScenes": 55,
+      "sourceCollectionSha256": "f903ce2f7027a668c29bf2f0727d35b7298c9a03e81c62b5fd5890e38c18ab3d",
+      "positionerSupplements": 14,
+      "positionerSource": "STATIC_CSS_DERIVED_FIXED_ARCHIVE_PROOF_NOT_GENERAL_PARSER_OR_FRESH_COMPUTED_STYLE",
+      "textBounds": {
+        "expandedCount": 844
+      },
+      "paintOrder": {
+        "changedParentCount": 14
+      },
+      "nativeControls": {
+        "progressFillCount": 4,
+        "closedDetailsCount": 18,
+        "hiddenNodeCount": 307
+      },
+      "fontSubstitutionCount": 3974,
+      "nativeGeneration": "NOT_RUN",
+      "nativeAudit": "NOT_RUN",
+      "nativeVisual": "NOT_RUN",
+      "present": "NOT_RUN",
+      "independentReimport": "NOT_RUN",
+      "deliveryGate": "NOT_RUN",
+      "limitations": [
+        "Historical derived capture, not fresh application capture",
+        "Font family and weight differences remain",
+        "Native progress track/animation and details marker UNKNOWN",
+        "Source corrections have not passed full native visual/playback/reimport verification"
+      ],
+      "scope": "Prepared local candidate only; same historical55 captures. Original v5 native/spec unchanged:COMPLETE13193,structurePASS,representative visualFAIL. No native success inferred from parity or transformation counts."
+    },
+    "acceptanceBasis": {
+      "source": "USER_CONFIRMED_HISTORICAL_2026_09_30_55_SCENES_TWO_SIZES",
+      "priority": "READABILITY_AND_OPERABILITY",
+      "inlinePolicy": "UNIFORM_RUN_APPROVED",
+      "scope": "User approved continuation of complete fixes,native verification,true fig independent reimport and docs-sync. Authorization is not execution or acceptance proof."
+    },
+    "previousV9Prepared55SceneCandidate": {
+      "status": "PREPARED_NATIVE_NOT_RUN",
+      "preparedAt": "2026-10-10T19:17:28.333Z",
+      "specId": "archivelens-native-v9-textfit-20261011",
+      "specPath": ".local/archivelens-derived-v9-textfit-20261011/converted/design-spec.json",
+      "evidence": ".local/archivelens-derived-v9-textfit-20261011/derivation-verification.json",
+      "specSha256": "11c4384ed6e6c13d2743673b3dcb65f66cf55bad293c94b0b26726cb829241e8",
+      "priorSpecSha256": "0f560dd21dd4ffc64c259ba32741b60b2501d4d5d5698cffc398de76afc36fcd",
+      "sourceParity": "PASS",
+      "assetParity": "PASS",
+      "reactionParity": "PASS",
+      "flowParity": "PASS",
+      "counts": {
+        "nodes": 13197,
+        "texts": 4170,
+        "components": 33,
+        "instances": 713,
+        "reactions": 739,
+        "flows": 2,
+        "textStyles": 104,
+        "variables": 102
+      },
+      "sourceScenes": 55,
+      "sourceCollectionSha256": "f903ce2f7027a668c29bf2f0727d35b7298c9a03e81c62b5fd5890e38c18ab3d",
+      "positionerSupplements": 14,
+      "positionerSource": "STATIC_CSS_DERIVED_FIXED_ARCHIVE_PROOF_NOT_GENERAL_PARSER_OR_FRESH_COMPUTED_STYLE",
+      "textBounds": {
+        "expandedCount": 844
+      },
+      "paintOrder": {
+        "changedParentCount": 16,
+        "searchFlexChanges": 2
+      },
+      "nativeControls": {
+        "progressFillCount": 4,
+        "closedDetailsCount": 18,
+        "hiddenNodeCount": 307
+      },
+      "fontSubstitutionCount": 3974,
+      "nativeGeneration": "NOT_RUN",
+      "nativeAudit": "NOT_RUN",
+      "nativeVisual": "NOT_RUN",
+      "present": "NOT_RUN",
+      "independentReimport": "NOT_RUN",
+      "deliveryGate": "NOT_RUN",
+      "limitations": [
+        "Historical derived capture, not fresh application capture",
+        "Font family and weight differences remain",
+        "Native progress track/animation and details marker UNKNOWN",
+        "Source corrections have not passed full native visual/playback/reimport verification"
+      ],
+      "scope": "Prepared v9 full55 historical-source textfit candidate only;382 fontSize changes based on702 stable native natural typography measurements,1771 already fit,51 preserved. v8 layout/inline/source proof inherited. Full native generation/audit/visual/Present/reimport NOT_RUN; separate five-scene probe is in progress. Original v5 unchanged:COMPLETE13193,structurePASS,visualFAIL.",
+      "inlineText": {
+        "mode": "uniform-run",
+        "changedCount": 286,
+        "hiddenFragmentCount": 597,
+        "nativeFit": "NOT_RUN"
+      },
+      "priorV7SpecSha256": "6a5d710f402842f0e003819055cb6fcda6d5a37a02ef759677049df8fddd8005",
+      "searchStaticFlowSupplements": 8,
+      "searchStaticFlowEvidence": ".local/reports/2026-10-11-search-static-flow-source-closure.json",
+      "priorV8SpecSha256": "749747f5f5f41ccb7b2756ae093bf44b5ac27ddeba0590bdd024b74f3c8f471d",
+      "priorV8AdaptedSpecSha256": "bad3cef216b98bb9df908822b6eb9968d35745ca182532703740108b2bfd9c9f",
+      "nativeTextFit": {
+        "changedCount": 382,
+        "unchangedCount": 1771,
+        "preservedCount": 51,
+        "reportPath": "converted/native-text-fit-report.json",
+        "nativeVisual": "NOT_RUN",
+        "verticalFit": "NOT_RUN"
+      },
+      "measurements": {
+        "path": ".local/reports/2026-10-11-native-text-metrics-readback.json",
+        "sha256": "242a8cec3df1e702a9d39cb4d43292c0743b28d85fd1d490347066fc0e4eb021",
+        "count": 702
+      }
+    },
+    "nativeV10FiveSceneProbe": {
+      "status": "FIVE_SCENE_REPORTED_VISUAL_DEFECTS_PASS",
+      "evidence": ".local/reports/2026-10-11-native-sourceproof-fidelity-probe.json",
+      "specId": "archivelens-sourceproof-fidelity-probe-20261011",
+      "scope": {
+        "pageId": "51:2550",
+        "rootNodeId": "51:2550"
+      },
+      "checkpoint": {
+        "applied": 1462,
+        "total": 1462,
+        "finalizedNodes": 1462,
+        "pending": null,
+        "finalized": true
+      },
+      "audit": {
+        "status": "PASS",
+        "writes": 0,
+        "path": "F:/stores/protype-code/.local/live/sourceproof-fidelity-probe-evidence-20261011/archivelens-sourceproof-fidelity-probe-20261011.audit.op-34c22ff3-13cc-4d63-8824-0bc047e73108.json",
+        "counts": {
+          "nodes": 1462,
+          "texts": 465,
+          "components": 33,
+          "instances": 86,
+          "reactions": 0,
+          "flows": 0,
+          "textStyles": 109,
+          "variables": 102
+        }
+      },
+      "exportStatus": "PASS_5_NATIVE_PNG_HASH_AND_DIMENSIONS",
+      "nativeVisual": "PASS_REPORTED_DEFECTS_ONLY",
+      "full55Native": "NOT_RUN",
+      "full55Visual": "NOT_RUN",
+      "present": "NOT_RUN",
+      "independentReimport": "NOT_RUN",
+      "limits": [
+        "Five-scene probe contains no reactions or flow starts; full prepared v10 retains739/2",
+        "Approved font substitution and bounded fontsize reduction retain readable content, not exact original font metrics",
+        "Baseline compact default-scope wrapping and clipped lower result are retained; original source capture and some historical PNG filenames differ",
+        "Remaining 50 scenes and prototype playback are NOT_RUN"
+      ]
+    },
+    "nativeV10Full55Run": {
+      "status": "GENERATION_COMPLETE_AUDIT_PASS_EXPORT_PASS_ACCEPTANCE_PENDING",
+      "runId": "archivelens-full55-v10-sourceproof-20261011",
+      "specId": "archivelens-native-v10-sourceproof-20261011",
+      "specPath": ".local/archivelens-derived-v10-sourceproof-20261011/converted/design-spec.json",
+      "specSha256": "08711ce1c1eedf7303f2d3681c8ecea10729e01719c053d07fc02abf3874602e",
+      "specSignature": "5e192bba02c5df5c17aa6be88777b2bfeffd803bc0a8eca0994cc8466199eabe",
+      "scope": {
+        "pageId": "55:88",
+        "rootNodeId": "55:88",
+        "basis": "Current scope confirmed by parent task; receipt binds expected file identity and run/spec."
+      },
+      "generation": {
+        "status": "COMPLETE",
+        "acknowledgedAt": "2026-10-11T09:16:51.375Z",
+        "checkpoint": {
+          "applied": 13197,
+          "total": 13197,
+          "finalizedNodes": 13197,
+          "pending": null,
+          "finalized": true
+        },
+        "operationId": "op-4d63f8e0-2b92-41a0-a331-231d8d5c7d6e",
+        "evidence": ".local/live/full55-v10-sourceproof-evidence-20261011/archivelens-full55-v10-sourceproof-20261011.apply.op-4d63f8e0-2b92-41a0-a331-231d8d5c7d6e.json",
+        "evidenceSha256": "edb41826a7dc9d6c0b0d815ac5b119ced275dc16c34b00529c9cd2b744a9eb12",
+        "nextAction": "audit"
+      },
+      "expectedCounts": {
+        "nodes": 13197,
+        "texts": 4170,
+        "scenes": 55,
+        "components": 33,
+        "instances": 713,
+        "reactions": 739,
+        "flows": 2,
+        "textStyles": 109,
+        "variables": 102
+      },
+      "countsBasis": "NATIVE_FULL_PAGE_AUDIT_VERIFIED",
+      "audit": {
+        "status": "PASS",
+        "writes": 0,
+        "errors": [],
+        "verifiedCounts": {
+          "nodes": 13197,
+          "texts": 4170,
+          "components": 33,
+          "instances": 713,
+          "reactions": 739,
+          "flows": 2,
+          "textStyles": 109,
+          "variables": 102
+        },
+        "pagination": {
+          "complete": true,
+          "totalNodes": 13197,
+          "snapshotSignature": "dbef7cf212ceb9b1e0874b5f8e39a2bed6f9a5397a802b4ae69279ecb014b245"
+        },
+        "evidence": ".local/live/full55-v10-sourceproof-delivery-input-20261011/expected/original-audit.json",
+        "sha256": "ca526ae2da6f4d21eb11ec50c6a9dd82fb793b0237fb9ef3b537a0875d2bb8bd",
+        "collectedAt": "2026-10-11T09:19:01.071Z",
+        "capturedAt": "2026-10-11T09:27:21.514Z"
+      },
+      "nativeVisual": "NOT_RUN",
+      "present": "NOT_RUN",
+      "nativeFigExport": {
+        "status": "PASS",
+        "sha256": "b125a3d95cae6953d156cafd6d5826490f5e9d35cfa270a45b41e35ebba3d15a",
+        "exportedAt": "2026-10-11T09:35:47.579Z",
+        "artifact": "expected/ArchiveLens-Full55-v10-sourceproof-20261011.fig",
+        "scope": "Genuine Figma Save local copy plus container checks; independent reimport NOT_RUN."
+      },
+      "independentReimport": "NOT_RUN",
+      "deliveryGate": "NOT_RUN",
+      "docsSyncReport": ".local/reports/2026-10-11-full55-v10-docs-sync-audit-export.md",
+      "scopeNote": "Use existing v10 fig; import into a distinct Figma file, locate copied v10 page and run full read-only audit. Do not apply/regenerate to fake import. Then repeat55 PNG export/zero-pixel comparison, historical visual QA and Present.",
+      "verifiedCounts": {
+        "nodes": 13197,
+        "texts": 4170,
+        "components": 33,
+        "instances": 713,
+        "reactions": 739,
+        "flows": 2,
+        "textStyles": 109,
+        "variables": 102
+      },
+      "original55Png": {
+        "status": "PASS",
+        "method": "figma-ui-batch-export",
+        "sceneCount": 55,
+        "scope": "Source, dimension, decode, hash and chronology checks only; full55 historical visual review NOT_RUN."
+      },
+      "fiveSceneReportedVisualDefects": {
+        "status": "PASS",
+        "sceneCount": 5,
+        "scope": "Previously reported text cropping/wrapping and toolbar occlusion in five full55 native PNGs only; remaining50/full55 visual and Present NOT_RUN.",
+        "evidence": ".local/reports/2026-10-11-full55-v10-five-scene-visual-review.json",
+        "sha256": "921c79690ad2d7c9ea3dc4fc9c3102c58a04df62e779f4f2d3e8f4fd0d4a4352",
+        "rootVerification": "Report file/identity/key/hash/decode/dimensions checked; compact-review-drawer directly viewed by root and readable. Independent delegate directly viewed all5."
+      }
+    }
   }
 }

@@ -13,13 +13,13 @@ The WebSocket server shares the MCP process lifecycle and binds only to IPv4 loo
 Install dependencies and run the local checks from this directory:
 
 ```powershell
-npm install
-npm run build:plugin-ui
+npm ci --ignore-scripts
+npm run build:plugin
 npm test
-npm start
+npm run doctor
 ```
 
-`npm test` builds the plugin UI and runs automated protocol, authorization, ownership, and audit tests with synthetic identities. These tests do not verify a live Figma session.
+`npm test` builds the plugin UI and native design runtime, then runs protocol, authorization, ownership, DesignSpec, capture, runtime, recovery and delivery tests with synthetic identities. These tests do not verify a live Figma session. Follow the [current startup guide](../../docs/guide/getting-started.md) for the persistent workflow CLI or MCP client configuration. `npm start` serves stdio MCP and requires a client.
 
 ## Write safety
 
@@ -36,9 +36,19 @@ The local authorization issuer is a development test utility. It accepts only id
 
 ## Tool surface and limitations
 
-The MCP tools expose status and scoped reads, plus task-owned create, update, delete, prototype, export, and operation-reconciliation operations. Mutations enforce page/root ancestry and ownership before reaching the plugin. Arbitrary JavaScript execution, arbitrary file paths, unguarded delete, and MCP authorization issuance are not exposed.
+The MCP tools expose status and scoped reads, task-owned frame operations, and `figma_scope_design_plan`, `figma_scope_design_apply`, `figma_scope_design_audit`, `figma_scope_design_export_png`. Design operations accept the bounded [DesignSpec contract](../../docs/reference/design-spec.md). Mutations enforce page/root ancestry and ownership before reaching the plugin. Arbitrary JavaScript execution, arbitrary file paths, unguarded delete, and MCP authorization issuance are not exposed. Legacy implicit POC write/export tools still reject requests.
 
-An operation ID identifies one logical mutation separately from its transport request ID. Reuse the same operation ID when investigating a timed-out mutation. A timeout does not prove that the mutation failed; read-only reconciliation is available for scoped create operations. General reconciliation for other mutation types and crash consistency are not implemented.
+An operation ID identifies one logical call separately from its transport request ID. Use the original ID to inspect an uncertain outcome; never blindly resend it. Each new design batch has a fresh operation ID and retains the same immutable spec and run identity. Design recovery verifies durable checkpoints and current node state; incomplete unrecorded writes still require inspection. See [generation and recovery](../../docs/guide/generation.md).
+
+## Design request budget
+
+Design operations default to a 40,000 ms transport timeout. `LOCAL_FIGMA_BRIDGE_DESIGN_TIMEOUT_MS` accepts a decimal integer from 40,000 through 180,000; invalid values prevent startup. The programmatic `createMcpServer({ designTimeoutMs })` option uses the same validation. This budget applies only to `figma_scope_design_*` operations and does not enable retries or bypass authorization, ownership or readback checks.
+
+The persistent workflow CLI accepts optional `designTimeoutMs` in its session JSON, passes it to the MCP child, and allows an additional 5,000 ms for its Design tool calls. Other CLI tools retain their 45,000 ms timeout. An external MCP client must be configured separately: the generated Codex fragment keeps `tool_timeout_sec = 45`, so an opted-in 120,000 ms server budget requires a client tool timeout of at least 125 seconds. Restart the session from its configuration file after changing the value. See the [startup guide](../../docs/guide/getting-started.md).
+
+A timeout does not cancel the plugin operation. Preserve the original operation ID and evidence, audit the actual document after reconnecting, then explicitly reconcile an unknown write outcome before another batch. A late response or a larger timeout does not authorize replay.
+
+The normal 35-second heartbeat idle limit is deferred only while an authenticated, ready, open connection has a supported pending Design request before its original deadline, bounded to at most 180,000 ms. The connection object, connection ID, session ID and file identity must all match. This does not refresh `lastSeen` or renew the request timer; completion, timeout or pending removal restores the ordinary idle checks, which run every 5 seconds. Ordinary tools and stale, unauthenticated or unready connections receive no exemption.
 
 ## Evidence boundary
 
