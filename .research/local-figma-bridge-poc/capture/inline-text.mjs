@@ -22,12 +22,13 @@ export function coalesceUniformInlineText(captures, spec, mappings, unchangedPre
     if (children.length < 2 || !children.some(c => c.kind === 'text')) return;
     function preserve(reason) { report.preservedCounts[reason] = (report.preservedCounts[reason] ?? 0) + 1; }
     if (children.length > 16 || children.some(c => c.kind !== 'text' || c.children?.length || !rect(c.rect) || typeof c.text !== 'string' || /[\r\n\t]/.test(c.text))) return preserve('NOT_SINGLE_LINE_DIRECT_TEXT');
-    if (!rect(raw.rect) || s.display !== 'block' || !['left','start','center'].includes(s.textAlign) || !['normal','nowrap'].includes(s.whiteSpace) || s.direction && s.direction !== 'ltr' || s.writingMode && s.writingMode !== 'horizontal-tb') return preserve('PARENT_LAYOUT_UNSUPPORTED');
+    if (!rect(raw.rect) || s.display !== 'block' || !['left','start','center','right'].includes(s.textAlign) || !['normal','nowrap'].includes(s.whiteSpace) || s.direction && s.direction !== 'ltr' || s.writingMode && s.writingMode !== 'horizontal-tb') return preserve('PARENT_LAYOUT_UNSUPPORTED');
     // Ancestor translations are already included in viewport-measured rectangles.
     // Never apply them again; the parent and fragments still require no transform.
     if ([raw,...children].some(n => n.style?.transform !== 'none') || ancestors.some(n => !isUnscaledAncestorTransform(n.style?.transform)) || ![s.overflowX,s.overflowY].every(v => ['visible','hidden','clip'].includes(v))) return preserve('COMPOSITION_UNSUPPORTED');
     const first = children[0];
     if (fields.slice(0,9).some(f => typeof first.style?.[f] !== 'string') || children.some(c => fields.some(f => c.style?.[f] !== first.style?.[f]))) return preserve('TEXT_STYLE_NOT_UNIFORM');
+    if (s.textAlign === 'right' && (first.style.textAlign !== 'right' || first.style.direction && first.style.direction !== 'ltr' || first.style.writingMode && first.style.writingMode !== 'horizontal-tb')) return preserve('PARENT_LAYOUT_UNSUPPORTED');
     // CSS normal/nowrap can collapse ordinary spaces across text-node boundaries.
     // Keep those fragments instead of inventing a whitespace-normalization rule.
     if (children.slice(1).some((c,i) => children[i].text.endsWith(' ') && c.text.startsWith(' '))) return preserve('WHITESPACE_COLLAPSE_UNSUPPORTED');
@@ -51,9 +52,9 @@ export function coalesceUniformInlineText(captures, spec, mappings, unchangedPre
     const text = children.map(c => c.text).join('');
     if (text.length > 100000) return preserve('TEXT_BUDGET_EXCEEDED');
     const target = targets[0], previous = { x: target.x, width: target.width, characters: target.props.characters };
-    // Left alignment retains the original left edge. Centering uses the whole
-    // measured content area instead of centering each fragment separately.
-    target.x = s.textAlign === 'center' ? left-raw.rect.x : target.x;
+    // Left alignment retains the original left edge. Center and right alignment
+    // use the whole measured content area with the captured text alignment.
+    target.x = ['center','right'].includes(s.textAlign) ? left-raw.rect.x : target.x;
     target.width = right-raw.rect.x-target.x; target.props.characters = text;
     for (const n of targets.slice(1)) n.props.visible = false;
     report.changedCount++; report.hiddenFragmentCount += targets.length-1;
