@@ -25,6 +25,58 @@ test('centered run uses whole content box and keeps centered alignment',()=>{
   p.children[0].rect.x=45;p.children[1].rect.x=60;
   const {spec}=convert(c);const n=spec.nodes.find(n=>n.key==='home/a');assert.equal(n.x,5);assert.equal(n.width,90);assert.equal(n.props.textAlignHorizontal,'CENTER');
 });
+function rightCapture() {
+  const c=capture(),p=c.root.children[0];
+  c.viewport={width:1280,height:800};c.root.rect={x:0,y:0,width:1280,height:800};
+  p.rect={x:1164.4000244140625,y:595,width:42,height:20};
+  p.style={...p.style,textAlign:'right',fontSize:'12px',paddingLeft:'0px',paddingRight:'0px'};
+  // The archived scan counter measured these contiguous fragments on one line.
+  p.children[0].text='0';p.children[0].rect={x:1182.300048828125,y:596.6000366210938,width:6.4749755859375,height:16};
+  p.children[1].text='/32';p.children[1].rect={x:1188.7750244140625,y:596.6000366210938,width:17.625,height:16};
+  for(const n of p.children)n.style={...p.style};
+  return c;
+}
+test('right-aligned measured counter uses whole content box while retaining provenance and RIGHT alignment',()=>{
+  const c=rightCapture(),before=structuredClone(c),baseline=adaptCaptures([c]);
+  const {spec,manifest}=convert(c),first=spec.nodes.find(n=>n.key==='home/a'),later=spec.nodes.find(n=>n.key==='home/b');
+  assert.deepEqual(c,before);assert.equal(manifest.inlineText.changedCount,1);
+  assert.equal(first.props.characters,'0/32');assert.equal(first.x,0);assert.equal(first.width,42);
+  assert.equal(first.y,1.60003662109375);assert.equal(first.height,16);assert.equal(first.props.textAlignHorizontal,'RIGHT');
+  assert.equal(later.props.characters,'/32');assert.equal(later.props.visible,false);
+  assert.deepEqual(spec.nodes.map(n=>n.key),baseline.spec.nodes.map(n=>n.key));assert.deepEqual(manifest.mappings,baseline.manifest.mappings);
+  assert.equal(manifest.inlineText.hiddenFragmentCount,1);assert.equal(manifest.inlineText.nativeFit,'NOT_RUN');
+});
+test('right alignment uses known padding and borders to retain the content right edge',()=>{
+  const c=capture(),p=c.root.children[0];
+  p.style={...p.style,textAlign:'right',paddingLeft:'7px',paddingRight:'9px',borderLeftWidth:'2px',borderRightWidth:'3px'};
+  p.children[0].rect.x=73;p.children[1].rect.x=88;
+  for(const n of p.children)n.style={...p.style};
+  const {spec,manifest}=convert(c),n=spec.nodes.find(n=>n.key==='home/a');
+  assert.equal(manifest.inlineText.changedCount,1);assert.equal(n.x,9);assert.equal(n.width,79);
+  assert.equal(n.x+n.width,p.rect.width-12);assert.equal(n.props.textAlignHorizontal,'RIGHT');
+});
+for(const [name,mutate] of [
+  ['logical end alignment',c=>{const p=c.root.children[0];for(const n of [p,...p.children])n.style.textAlign='end';}],
+  ['RTL direction',c=>{const p=c.root.children[0];for(const n of [p,...p.children])n.style.direction='rtl';}],
+  ['fragment alignment differing from the parent',c=>{for(const n of c.root.children[0].children)n.style.textAlign='left';}],
+  ['RTL fragments in an LTR parent',c=>{for(const n of c.root.children[0].children)n.style.direction='rtl';}],
+  ['vertical fragments in a horizontal parent',c=>{for(const n of c.root.children[0].children)n.style.writingMode='vertical-rl';}],
+  ['mixed fonts',c=>{c.root.children[0].children[1].style.fontWeight='700';}],
+  ['non-contiguous fragments',c=>{c.root.children[0].children[1].rect.x-=1;}],
+  ['second line',c=>{c.root.children[0].children[1].rect.y+=20;}],
+  ['unknown content boundary',c=>{delete c.root.children[0].style.paddingLeft;}],
+  ['fragment outside content',c=>{const p=c.root.children[0];for(const n of p.children)n.rect.x+=1;}],
+  ['sibling in the expanded content area',c=>{c.root.children.push({id:'floating',kind:'element',tag:'span',style:{...style},rect:{x:1165,y:596.6000366210938,width:5,height:16},children:[]});}],
+]) test(`preserves right fragments with unsupported ${name}`,()=>{
+  const c=rightCapture();mutate(c);const before=structuredClone(c),{spec,manifest}=convert(c);
+  assert.deepEqual(c,before);assert.equal(manifest.inlineText.changedCount,0);
+  assert.equal(spec.nodes.find(n=>n.key==='home/a').props.characters,'0');assert.equal(spec.nodes.find(n=>n.key==='home/b').props.visible,undefined);
+});
+test('right-aligned fragments remain separate when a fragment owns an interaction',()=>{
+  const {spec,manifest}=convert(rightCapture(),{links:[{sceneId:'home',sourceId:'b',targetSceneId:'home',trigger:'ON_CLICK'}]});
+  assert.equal(manifest.inlineText.changedCount,0);assert.equal(spec.reactions[0].sourceKey,'home/b');
+  assert.equal(spec.nodes.find(n=>n.key==='home/a').props.characters,'0');assert.equal(spec.nodes.find(n=>n.key==='home/b').props.visible,undefined);
+});
 test('preserves normal and nowrap runs with ordinary spaces on both sides of a fragment boundary',()=>{
   for(const whiteSpace of ['normal','nowrap']) {
     const c=capture(),p=c.root.children[0];p.style.whiteSpace=whiteSpace;
