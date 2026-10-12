@@ -155,7 +155,11 @@ export function createDesignRuntime(figma, guards) {
     }
     return ctx;
   }
-  const save = ctx => put(ctx.scope.root, ctx.ledgerKey, ctx.state);
+  const save = ctx => {
+    // Includes empty mappings and the first durable intent after a native await.
+    guards.assertInScope(ctx.scope.root, ctx.scope);
+    put(ctx.scope.root, ctx.ledgerKey, ctx.state);
+  };
   const index = (ctx, kind, key) => `${PREFIX}${ctx.ns}-${kind}-${designSignature(key).slice(0, 24)}`;
   const marker = (ctx, kind, key) => `${PREFIX}${ctx.ns}:${kind}:${key}`;
   const entry = (ctx, kind, key) => readJson(ctx.scope.root, index(ctx, kind, key));
@@ -214,6 +218,7 @@ export function createDesignRuntime(figma, guards) {
     return raw;
   }
   function checkExisting(ctx) {
+    guards.assertInScope(ctx.scope.root, ctx.scope);
     for (const def of ctx.order) if (ctx.map.has(def.key)) {
       const node = ctx.map.get(def.key);
       // Both guards share one fresh raw read in this synchronous pass. Never

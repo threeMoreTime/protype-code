@@ -124,10 +124,16 @@ function fixture({ automaticFlow = false, reactionHook, nativeVectors = false, v
       setBoundVariableForPaint(p, field, v) { return { ...p, boundVariables: { [field]: { type: 'VARIABLE_ALIAS', id: v.id } } }; },
     },
   };
+  function assertCurrentRootScope() {
+    if (scopeRoot.removed) throw new Error('SCOPE_ROOT_NOT_FOUND');
+    let rootPage = scopeRoot;
+    while (rootPage && rootPage.type !== 'PAGE') rootPage = rootPage.parent;
+    if (rootPage !== page) throw new Error('SCOPE_ROOT_PAGE_MISMATCH');
+  }
   const guards = {
-    async resolveScope(scope) { assert.equal(scope.fileIdentity, `figma-file:${figma.fileKey}`); assert.equal(scope.rootNodeId, scopeRoot.id); return { page, root: scopeRoot }; },
+    async resolveScope(scope) { assert.equal(scope.fileIdentity, `figma-file:${figma.fileKey}`); assert.equal(scope.rootNodeId, scopeRoot.id); assertCurrentRootScope(); return { page, root: scopeRoot }; },
     assertTrustedOwnership(owner) { assert.equal(owner.taskId, 'task-test'); },
-    assertInScope(node) { let p = node; while (p && p !== scopeRoot) p = p.parent; assert.equal(p, scopeRoot, 'scope violation'); },
+    assertInScope(node) { assertCurrentRootScope(); assert.ok(node && !node.removed, 'scope violation'); let p = node; while (p && p !== scopeRoot) p = p.parent; assert.equal(p, scopeRoot, 'scope violation'); },
     assertTaskOwned(node, owner) { assert.equal(node.getPluginData('owner'), owner.taskId, 'foreign ownership'); },
     assertTaskOwnedSubtree(node, owner) { this.assertTaskOwned(node, owner); for (const child of node.children ?? []) this.assertTaskOwnedSubtree(child, owner); },
     markTaskOwned(node, role, owner) { node.setPluginData('owner', owner.taskId); node.setPluginData('role', role); },
@@ -171,6 +177,85 @@ async function complete(f, s, options = {}) {
   for (let i = 0; i < 100; i++) { result = await f.run('scope_design_apply', s, options); if (result.status !== 'IN_PROGRESS') break; }
   assert.equal(result.status, 'COMPLETE', JSON.stringify(result)); return result;
 }
+
+function rootScopeSpec() {
+  const s = spec(); s.reactions = []; s.flows = []; return s;
+}
+
+function ledgerKey(s) {
+  const ns = designSignature({ workspace: 'workspace-test', task: 'task-test', spec: s.id }).slice(0, 24);
+  return `bridge-design-v1-${ns}-ledger`;
+}
+
+test('normal PAGE and FRAME roots complete and audit without weakening scope', async () => {
+  for (const frameRoot of [false, true]) {
+    const f = fixture({ frameRoot }), s = rootScopeSpec();
+    await complete(f, s);
+    assert.equal((await f.run('scope_design_audit', s)).status, 'PASS');
+    assert.equal([...f.nodes.values()].find(node => node.name === 'start').parent, f.scopeRoot);
+  }
+});
+
+test('initial font await rejects a moved or removed FRAME root before any generation write', async () => {
+  for (const change of ['moved', 'removed']) {
+    let f;
+    f = fixture({ frameRoot: true, async fontListHook() {
+      await Promise.resolve();
+      if (change === 'moved') otherPage.appendChild(f.scopeRoot);
+      else f.scopeRoot.removed = true;
+    } });
+    const otherPage = f.make('PAGE'), s = rootScopeSpec(), beforeNodes = f.nodes.size;
+    await assert.rejects(f.run('scope_design_apply', s), change === 'moved' ? /SCOPE_ROOT_PAGE_MISMATCH/ : /SCOPE_ROOT_NOT_FOUND/);
+    assert.equal(f.writes(), 0, 'an empty mapping cannot bypass current root scope validation');
+    assert.equal(f.nodes.size, beforeNodes, 'no native node is created after the root leaves scope');
+    assert.equal(f.scopeRoot.getPluginData(ledgerKey(s)), '', 'no ledger or pending intent is written out of scope');
+  }
+});
+
+test('page switch await rejects a moved FRAME root before writing the initial checkpoint', async () => {
+  const f = fixture({ frameRoot: true }), s = rootScopeSpec(), otherPage = f.make('PAGE');
+  const beforeNodes = f.nodes.size;
+  f.figma.currentPage = otherPage;
+  f.figma.setCurrentPageAsync = async page => {
+    f.figma.currentPage = page;
+    await Promise.resolve(); otherPage.appendChild(f.scopeRoot);
+  };
+  const result = await f.run('scope_design_apply', s);
+  assert.equal(result.status, 'PARTIAL_FAILURE'); assert.match(result.error, /SCOPE_ROOT_PAGE_MISMATCH/);
+  assert.equal(f.writes(), 0); assert.equal(f.nodes.size, beforeNodes);
+  assert.equal(f.scopeRoot.getPluginData(ledgerKey(s)), '');
+});
+
+test('native text style await preserves pending intent and performs no later writes after a FRAME root moves or is removed', async () => {
+  for (const change of ['moved', 'removed']) {
+    let f, writesAtChange, ledgerAtChange;
+    const s = rootScopeSpec();
+    s.textStyles = [{ key: 'body', name: 'Body', fontName: { family: 'Inter', style: 'Regular' }, fontSize: 16 }];
+    s.nodes[2].props = { characters: 'Editable 中文', textStyleKey: 'body',
+      fills: [{ type: 'SOLID', color: { r: 0, g: 1, b: 0 } }] };
+    f = fixture({ frameRoot: true, async textStyleHook() {
+      await Promise.resolve();
+      if (change === 'moved') otherPage.appendChild(f.scopeRoot);
+      else f.scopeRoot.removed = true;
+      writesAtChange = f.writes(); ledgerAtChange = f.scopeRoot.getPluginData(ledgerKey(s));
+    } });
+    const otherPage = f.make('PAGE');
+    const result = await f.run('scope_design_apply', s, { allowGlobalResources: true });
+    assert.equal(result.status, 'PARTIAL_FAILURE');
+    assert.match(result.error, change === 'moved' ? /SCOPE_ROOT_PAGE_MISMATCH/ : /SCOPE_ROOT_NOT_FOUND/);
+    assert.equal(f.writes(), writesAtChange, 'native await must not authorize any subsequent mutation');
+    assert.equal(f.scopeRoot.getPluginData(ledgerKey(s)), ledgerAtChange, 'the durable pending receipt is preserved verbatim');
+    assert.equal(result.checkpoint.pending.kind, 'node'); assert.equal(result.checkpoint.pending.key, 'label');
+    assert.equal(result.checkpoint.finalized, false);
+    const label = [...f.nodes.values()].find(node => node.name === 'label');
+    assert.equal(label.getPluginData('bridge-design-v1-state'), 'creating');
+    assert.deepEqual(label.fills, [], 'no paint setter runs after the native await');
+    assert.equal(label.width, 100); assert.equal(label.x, 0, 'no geometry setter runs after the native await');
+    await assert.rejects(f.run('scope_design_apply', s, { allowGlobalResources: true }),
+      change === 'moved' ? /SCOPE_ROOT_PAGE_MISMATCH/ : /SCOPE_ROOT_NOT_FOUND/);
+    assert.equal(f.writes(), writesAtChange, 'a repeated request cannot replay the interrupted setter');
+  }
+});
 
 test('plan is read only; generated geometry, editable text, click, timer, flows read back', async () => {
   const f = fixture(), s = spec();

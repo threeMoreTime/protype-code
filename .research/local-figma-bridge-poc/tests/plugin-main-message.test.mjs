@@ -8,6 +8,27 @@ import { test } from "node:test";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = readFileSync(path.join(root, "plugin", "code.js"), "utf8");
 
+test("scope guard validates the current PAGE of the root before accepting the root or its descendants", () => {
+  const page = { id: "1:1", type: "PAGE", selection: [] };
+  const otherPage = { id: "2:1", type: "PAGE", selection: [] };
+  const frame = { id: "1:2", type: "FRAME", parent: page };
+  const child = { id: "1:3", type: "TEXT", parent: frame };
+  const figma = { root: { children: [page, otherPage] }, currentPage: page,
+    ui: { postMessage() {} }, showUI() {}, on() {} };
+  const context = { figma, __html__: "", Date, Math, Set, String };
+  vm.runInNewContext(`${source}\nglobalThis.scopeGuardForTest = assertInScope;`, context);
+  const frameScope = { page, root: frame }, pageScope = { page, root: page };
+  for (const [node, scope] of [[frame, frameScope], [child, frameScope], [page, pageScope], [child, pageScope]]) {
+    assert.doesNotThrow(() => context.scopeGuardForTest(node, scope));
+  }
+  frame.parent = otherPage;
+  for (const node of [frame, child]) assert.throws(() => context.scopeGuardForTest(node, frameScope), /SCOPE_ROOT_PAGE_MISMATCH/);
+  frame.parent = page; frame.removed = true;
+  for (const node of [frame, child]) assert.throws(() => context.scopeGuardForTest(node, frameScope), /SCOPE_ROOT_NOT_FOUND/);
+  frame.removed = false; child.removed = true;
+  assert.throws(() => context.scopeGuardForTest(child, frameScope), /SCOPE_VIOLATION/);
+});
+
 function imageReadbackFixture() {
   const namespace = "a".repeat(24);
   const imageKey = (suffix) => `bridge-design-v1-${namespace}-image-${suffix.toString(16).padStart(24, "0")}`;
