@@ -397,3 +397,23 @@ Page51:2550五场景1462节点生成及收尾COMPLETE、pendingnull；结构审�
 通过Figma Save local copy保存真正的[修正版.fig](../../.local/live/full55-v10-sourceproof-delivery-input-20261011/expected/ArchiveLens-Full55-v10-sourceproof-20261011.fig)，SHA256 `b125a3d95cae6953d156cafd6d5826490f5e9d35cfa270a45b41e35ebba3d15a`。容器、CRC、原生canvas、元数据和缩略图检查PASS；整文件含保留的历史与探针页，当前验收范围为v10 page55:88。独立回导、55场景历史视觉复验、Present/滚动及最终交付仍NOT_RUN。事实与边界见[docs-sync报告](../../.local/reports/2026-10-11-full55-v10-docs-sync-audit-export.md)和[检查点](../../.local/reports/2026-10-11-full55-v10-native-audit-export-checkpoint.json)。
 
 当前全量页中此前五个缺陷场景也已独立直接目视复验，限定已报告裁切、断行和工具栏遮挡范围PASS；主代理核对五份实际图片的hash/解码/尺寸/身份，并直接查看紧凑抽屉的任务标题、备注、添加备注和底部控件。见[全量页五场景视觉报告](../../.local/reports/2026-10-11-full55-v10-five-scene-visual-review.json)。剩余50场景未在这次复核中验证，不能扩大为全55视觉通过。
+
+## 2026-10-12 五批本地提交与作用域修复
+
+用户要求先提交当前快照，再继续修正。五批已依次提交：`86e76d8` 界面采集和规格转换、`a2684e9` 交付验证工具、`0d74127` 可恢复原生生成和审计、`27246ec` 本地启动和持久工作流、`330a030` 文档与交接。各批累积隔离测试分别为 251、262、363、372 项 PASS；文档批 105 个本地路径检查 PASS。最后一次提交为 `330a03087ee42d57d6821df63c645300b6be54d7`，没有推送、创建 PR 或发布；本机配置与仅行尾差异的第三方许可证文件未纳入提交。详见[实际提交台账](../../.local/reports/2026-10-12-commit-execution-ledger.json)。生成指南的过期概述按用户指定顺序在提交后修正，不以快照提交代表最终交付完成。
+
+提交后发现授权 Frame root 在原生异步等待期间移到其他 Page 时，旧作用域检查可能接受 root 本身并继续写入。修复重新核对 root 当前 Page，并在空映射核验与持久日志保存处补齐检查，保留旧 pending 和失败记录。独立工作树以 `330a030` 为基线先仅应用新增测试，旧实现实际 104/107 PASS、3 FAIL；再应用修复，全量 377/377 PASS、0 fail/cancelled/skipped，doctor 六项与生成区 `--check` PASS。正常 Page/Frame、字体等待、页面切换及文字样式等待均有行为断言。见[修复验证记录](../../.local/reports/2026-10-12-scope-fix-verification.json)。这是 API double/VM 证据，真实 Figma 异步移动场景 NOT_RUN，未扩大为生产集成证明。修复及本节同步仍在工作树，未纳入上述五批提交。
+
+## 2026-10-12 其余 50 场景视觉复核
+
+两位委派复核者分别直接查看 25 组保存的 v10 原生 PNG 与历史 PNG，合计 50 场景、100 张图。主代理重新计算两份报告及每场景原生图、历史图、采集 JSON、HTML 共 200 个源文件哈希，验证覆盖无遗漏或重复，且与先前五场景合并精确覆盖规格 55 个 scene key。主代理另直接查看 `scan-empty/scene`、`compact-tasks/scene` 两组图片，独立确认计数断行、任务标题裁切和完成状态叠压耗时。结果为 24 PASS、26 FAIL、0 NOT_VERIFIED，见[聚合报告](../../.local/reports/2026-10-12-remaining50-visual-review.json)。PASS 仅覆盖报告列出的可读性、主要布局及遮挡标准，仍记录字体、滚动条装饰、分隔线等差异；不证明像素一致。
+
+全量历史视觉现为 FAIL。此前五场景已报告缺陷范围的 PASS 和全量结构审计、PNG 来源、原生 .fig 容器 PASS 均保留；它们不能抵消此次新缺陷。问题包括右对齐计数断行、任务卡标签或标题裁切、混合多行文字叠印，以及 radio、颜色块、滑杆或折叠三角缺失。只读[根因记录](../../.local/reports/2026-10-12-visual-root-causes.json)分别保留源范围、规格几何和既有双读字体测量，不把多行 Range union 当作可安全重排的单行。HTML checked 属性只证明默认/序列化状态，不能通用替代真实 live checked 值。
+
+用户手动登录后，已直接读回 Figma 原文件 `OzCxJpHmpEUTMflnnpL5VW` 和既有 v10 页面名称；没有修改已完成页或重新生成，也未导入新文件。此轮新修正版原生生成、Present、独立回导及最终交付均 NOT_RUN。下一步应从固定来源修复并使用新的 specId、run 和明确作用域，保留 v10 失败画面，不能以回导像素相同证明视觉缺陷已修复。
+
+## 2026-10-12 右对齐计数器修复与原生探针
+
+RIGHT 片段曾被 `uniform-run` 对齐守卫排除，原 `/32` 因此留在狭窄独立文字框中。现有守卫增加受限 `right`：相同字体样式、LTR、水平排版、同一行连续范围与已知内容边界，仍拒绝 `end`、RTL、多行、交互及重叠。新增回归在旧实现实际 40 PASS、2 FAIL，修复后 42/42 PASS，相关采集检查 74/74 PASS；主代理独立运行 42 项 PASS。
+
+新 Page `57:715` 的 run `archivelens-right-counter-probe-20261012` 完成 13/13 节点，pending 为 null；结构审计 PASS，960×880 原生 PNG 来源及哈希 PASS。主代理直接观察四个源计数器 `0/32`、`2/32` 完整单行且无裁切，见[原生探针报告](../../.local/reports/2026-10-12-right-counter-native-probe.json)。这是独立测试框内的计数器验收，完整场景及全量修正版 NOT_RUN；旧 v10 未改动，Present、回导和云端同步未验证。
