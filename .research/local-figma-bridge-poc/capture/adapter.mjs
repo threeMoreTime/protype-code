@@ -66,6 +66,147 @@ function nativeControlSource(raw, field, style = false) {
   }
   return supported ? { kind: evidence.kind, evidence: structuredClone(evidence) } : { kind: 'UNKNOWN', reason: 'EVIDENCE_UNSUPPORTED' };
 }
+const validControlColor = value => {
+  const color = rgba(value);
+  return color && ['r', 'g', 'b', 'a'].every(channel => Number.isFinite(color[channel]) && color[channel] >= 0 && color[channel] <= 1) ? color : null;
+};
+const controlNumber = value => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  return typeof value === 'string' && /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim()) && Number.isFinite(Number(value)) ? Number(value) : undefined;
+};
+function controlSamples(input, mode) {
+  if (input === undefined) return new Map();
+  const fail = () => { throw new Error('Invalid nativeControlSamples: use explicit approximated samples with SHA256 provenance'); };
+  const plain = value => value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+  if (mode !== 'sampled' || !plain(input) || Reflect.ownKeys(input).length > 2000) fail();
+  const fields = { radio: ['checked', 'accentColor', 'outlineColor'], checkbox: ['checked', 'accentColor', 'outlineColor'], color: ['value'], range: ['value', 'accentColor', 'trackColor', 'trackHeight', 'thumbSize'], 'details-marker': ['open', 'markerWidth', 'markerHeight'] };
+  const map = new Map();
+  for (const key of Reflect.ownKeys(input)) {
+    if (typeof key !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.:/-]*\/[A-Za-z0-9][A-Za-z0-9_.:/-]*$/.test(key) || key.length > 241) fail();
+    const value = input[key];
+    if (!plain(value) || !Object.hasOwn(fields, value.kind) || value.approximation !== true) fail();
+    if (Reflect.ownKeys(value).some(field => typeof field !== 'string' || !['kind', 'approximation', 'evidence', ...fields[value.kind]].includes(field))) fail();
+    const evidence = value.evidence;
+    if (!plain(evidence) || evidence.kind !== 'EXPLICIT_VISUAL_SAMPLE' || Reflect.ownKeys(evidence).some(field => !['kind', 'referenceSha256', 'captureSha256', 'htmlSha256', 'note'].includes(field))) fail();
+    if (!['referenceSha256', 'captureSha256', 'htmlSha256'].every(field => typeof evidence[field] === 'string' && /^[a-f0-9]{64}$/.test(evidence[field])) || typeof evidence.note !== 'string' || !evidence.note.trim() || evidence.note.length > 1000) fail();
+    for (const field of ['checked', 'open']) if (Object.hasOwn(value, field) && typeof value[field] !== 'boolean') fail();
+    if (Object.hasOwn(value, 'value') && (value.kind === 'color' ? !/^#[a-f0-9]{6}$/i.test(value.value) : typeof value.value !== 'number' || !Number.isFinite(value.value))) fail();
+    for (const field of ['accentColor', 'outlineColor', 'trackColor']) if (Object.hasOwn(value, field) && (typeof value[field] !== 'string' || !validControlColor(value[field]))) fail();
+    for (const field of ['trackHeight', 'thumbSize', 'markerWidth', 'markerHeight']) if (Object.hasOwn(value, field) && (typeof value[field] !== 'number' || !Number.isFinite(value[field]) || value[field] < 0.01 || value[field] > 1000)) fail();
+    // Hashes identify the caller's evidence files. This in-memory adapter does
+    // not read those files or independently verify the caller's observation.
+    map.set(key, structuredClone(value));
+  }
+  return map;
+}
+function archivedInputField(raw, field) {
+  const entry = raw.archivedControl?.[field], evidence = entry?.evidence, value = entry?.value;
+  const attribute = ({ inputType: 'type', defaultChecked: 'checked', defaultValue: 'value' })[field] ?? field;
+  let supported = evidence?.kind === 'HTML_ATTRIBUTE_DERIVED' && evidence.nodeId === raw.id && evidence.tag === 'input' && raw.tag === 'input'
+    && evidence.attribute === attribute && typeof evidence.present === 'boolean' && (evidence.present ? typeof evidence.sourceValue === 'string' : evidence.sourceValue === undefined);
+  if (field === 'defaultChecked') supported &&= typeof value === 'boolean' && value === evidence.present;
+  else {
+    supported &&= evidence?.present === true;
+    if (field === 'inputType') supported &&= typeof value === 'string' && ['radio', 'checkbox', 'color', 'range'].includes(value) && evidence.sourceValue.toLowerCase() === value;
+    else if (['min', 'max', 'step'].includes(field) || field === 'defaultValue' && typeof value === 'number') supported &&= typeof value === 'number' && Number.isFinite(value) && /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(evidence?.sourceValue?.trim() ?? '') && Number(evidence.sourceValue) === value;
+    else supported &&= typeof value === 'string' && value.length <= 256 && (field === 'defaultValue' && raw.archivedControl?.inputType?.value === 'color' ? evidence?.sourceValue?.toLowerCase() === value.toLowerCase() : evidence?.sourceValue === value);
+  }
+  return supported ? { value, source: { kind: 'HTML_ATTRIBUTE_DERIVED', evidence: structuredClone(evidence), stateRole: field === 'inputType' ? 'STRUCTURAL_HINT' : ['min', 'max', 'step'].includes(field) ? 'DECLARED_CONSTRAINT' : 'DECLARED_DEFAULT' } } : { source: { kind: 'UNKNOWN', reason: 'ARCHIVED_INPUT_EVIDENCE_UNSUPPORTED' } };
+}
+function sampledInput(raw, key, sceneId, sample, warn) {
+  const attrs = raw.attrs ?? {}, style = raw.style ?? {}, bounds = raw.rect;
+  const capturedType = typeof attrs.inputType === 'string' && attrs.inputTypeEvidence === undefined && raw.attrsEvidence?.inputType === undefined ? attrs.inputType : undefined;
+  const declaredType = archivedInputField(raw, 'inputType');
+  const type = capturedType ?? declaredType.value;
+  if (!['radio', 'checkbox', 'color', 'range'].includes(type)) return null;
+  const record = { sceneId, sourceId: raw.id, nodeKey: key, type, state: 'UNKNOWN', visual: 'APPROXIMATED', shapeNodeKeys: [], sources: { inputType: capturedType ? { kind: 'CAPTURED' } : declaredType.source } };
+  const definitions = [];
+  const add = (suffix, type, geometry, props) => { const nodeKey = `${key}/${suffix}`; record.shapeNodeKeys.push(nodeKey); definitions.push({ key: nodeKey, name: `Sampled ${suffix}`, type, parentKey: key, ...geometry, props }); };
+  if (sample && sample.kind !== type) { warn(sceneId, raw.id, 'NATIVE_CONTROL_SAMPLE_TYPE_MISMATCH'); sample = undefined; }
+  const sampleSource = () => ({ kind: 'EXPLICIT_VISUAL_SAMPLE', approximation: true, evidence: structuredClone(sample.evidence), evidenceVerification: 'CALLER_ASSERTED' });
+  if (sample) {
+    for (const field of ['accentColor', 'outlineColor', 'trackColor', 'trackHeight', 'thumbSize']) if (Object.hasOwn(sample, field)) record.sources[field] = { ...sampleSource(), value: sample[field] };
+  }
+  const state = (field, valid, normalize = value => value) => {
+    const captured = raw.attrsEvidence?.[field] === undefined && (field === 'checked' ? attrs[field] !== null && attrs[field] !== undefined : attrs.valueCaptured === true);
+    if (captured) {
+      if (!valid(attrs[field])) warn(sceneId, raw.id, 'NATIVE_INPUT_STATE_INVALID', `${field}: malformed captured state cannot be replaced by a sample`);
+      const value = valid(attrs[field]) ? normalize(attrs[field]) : attrs[field];
+      if (sample && Object.hasOwn(sample, field) && sample[field] !== value) warn(sceneId, raw.id, 'NATIVE_CONTROL_SAMPLE_CONFLICT', `${field}: live capture takes precedence`);
+      record.sources[field] = { kind: field === 'checked' && !valid(attrs[field]) ? 'CAPTURED_INVALID' : 'CAPTURED', ...(value !== attrs[field] ? { normalization: 'STRICT_NUMERIC_STRING', rawValue: attrs[field] } : {}) }; return value;
+    }
+    if (sample && Object.hasOwn(sample, field)) { record.sources[field] = sampleSource(); return sample[field]; }
+    record.sources[field] = { kind: 'UNKNOWN' }; return undefined;
+  };
+  for (const field of ['defaultChecked', 'defaultValue']) { const declared = archivedInputField(raw, field); if (declared.value !== undefined) record[field] = declared; }
+  warn(sceneId, raw.id, 'NATIVE_INPUT_STYLE_APPROXIMATED', 'Editable glyph geometry is an explicit approximation; native visual verification is still required');
+  if (type === 'radio' || type === 'checkbox') {
+    const checked = state('checked', value => typeof value === 'boolean');
+    record.state = checked === undefined ? 'UNKNOWN' : typeof checked !== 'boolean' ? 'INVALID' : checked ? 'CHECKED' : 'UNCHECKED';
+    const size = Math.min(bounds.width, bounds.height), x = (bounds.width - size) / 2, y = (bounds.height - size) / 2;
+    const outline = validControlColor(sample?.outlineColor ?? style.color), accent = validControlColor(sample?.accentColor ?? style.accentColor ?? style.color);
+    if (size >= 0.01 && outline) add('choice-ring', type === 'radio' ? 'ELLIPSE' : 'RECTANGLE', { x, y, width: size, height: size }, { fills: [], strokes: paint(outline), strokeWeight: Math.min(1, size / 4), strokeAlign: 'INSIDE' });
+    else warn(sceneId, raw.id, 'CHOICE_STYLE_UNKNOWN');
+    if (checked === true && accent && size / 2 >= 0.01) {
+      const inner = size / 2;
+      if (type === 'radio') add('choice-dot', 'ELLIPSE', { x: x + size / 4, y: y + size / 4, width: inner, height: inner }, { fills: paint(accent), strokes: [] });
+      else add('choice-check', 'VECTOR', { x: x + size / 4, y: y + size / 4, width: inner, height: inner }, { fills: [], strokes: paint(accent), strokeWeight: Math.min(1.5, inner / 4), vectorPaths: [{ windingRule: 'NONZERO', data: `M 0 ${inner / 2} L ${inner / 3} ${inner} L ${inner} 0` }] });
+    }
+    if (checked === undefined) warn(sceneId, raw.id, 'CHOICE_STATE_UNKNOWN', 'HTML checked/defaultValue attributes are not live state');
+  } else if (type === 'color') {
+    const value = state('value', value => typeof value === 'string' && /^#[a-f0-9]{6}$/i.test(value)), color = validControlColor(value);
+    if (value === undefined || !color || typeof value !== 'string' || !/^#[a-f0-9]{6}$/i.test(value)) {
+      if (record.sources.value.kind === 'CAPTURED') record.state = 'INVALID';
+      warn(sceneId, raw.id, 'COLOR_VALUE_UNKNOWN', 'No valid captured or explicitly sampled live color');
+    }
+    else {
+      record.state = 'VALUE'; record.value = value;
+      const inset = Math.min(4, bounds.width / 4, bounds.height / 4);
+      add('color-swatch', 'RECTANGLE', { x: inset, y: inset, width: bounds.width - inset * 2, height: bounds.height - inset * 2 }, { fills: paint(color), strokes: [] });
+    }
+  } else {
+    const rangeBound = field => {
+      if (Object.hasOwn(attrs, field)) {
+        if (raw.attrsEvidence?.[field] !== undefined) return { source: { kind: 'UNKNOWN', reason: 'CAPTURED_BOUND_EVIDENCE_UNSUPPORTED' } };
+        const value = controlNumber(attrs[field]);
+        return { value: value === undefined ? attrs[field] : value, source: { kind: value === undefined ? 'CAPTURED_INVALID' : 'CAPTURED', ...(value !== undefined && value !== attrs[field] ? { normalization: 'STRICT_NUMERIC_STRING', rawValue: attrs[field] } : {}) } };
+      }
+      return archivedInputField(raw, field);
+    };
+    const min = rangeBound('min'), max = rangeBound('max'), value = state('value', value => controlNumber(value) !== undefined, controlNumber);
+    record.sources.min = min.source; record.sources.max = max.source;
+    if (min.value === undefined || max.value === undefined) warn(sceneId, raw.id, 'RANGE_BOUNDS_UNKNOWN', 'No implicit 0/100 bounds are used');
+    else if (value === undefined) warn(sceneId, raw.id, 'RANGE_VALUE_UNKNOWN', 'Declared HTML value is not live state');
+    else if (![min.value, max.value, value, max.value - min.value, value - min.value].every(value => typeof value === 'number' && Number.isFinite(value)) || min.value >= max.value || value < min.value || value > max.value) { record.state = 'INVALID'; warn(sceneId, raw.id, 'RANGE_STATE_INVALID', 'Invalid bounds, overflowing span or out-of-range value; no clamping is performed'); }
+    else {
+      record.state = 'VALUE'; record.value = value; record.min = min.value; record.max = max.value; record.ratio = (value - min.value) / (max.value - min.value);
+      const accent = validControlColor(sample?.accentColor ?? style.accentColor), track = validControlColor(sample?.trackColor);
+      const thumbSize = sample?.thumbSize ?? Math.min(16, bounds.height), trackHeight = sample?.trackHeight ?? Math.min(6, bounds.height);
+      if (!accent || !track || thumbSize > bounds.height || thumbSize > bounds.width || trackHeight > bounds.height || bounds.width - thumbSize < 0.01) warn(sceneId, raw.id, 'RANGE_STYLE_UNKNOWN', 'No supported track/accent paint or in-bounds sampled geometry');
+      else {
+        const trackWidth = bounds.width - thumbSize, trackX = thumbSize / 2, y = (bounds.height - trackHeight) / 2;
+        add('range-track', 'RECTANGLE', { x: trackX, y, width: trackWidth, height: trackHeight }, { fills: paint(track), strokes: [], cornerRadius: trackHeight / 2 });
+        if (trackWidth * record.ratio >= 0.01) add('range-fill', 'RECTANGLE', { x: trackX, y, width: trackWidth * record.ratio, height: trackHeight }, { fills: paint(accent), strokes: [], cornerRadius: trackHeight / 2 });
+        add('range-thumb', 'ELLIPSE', { x: trackWidth * record.ratio, y: (bounds.height - thumbSize) / 2, width: thumbSize, height: thumbSize }, { fills: paint(accent), strokes: [] });
+      }
+    }
+  }
+  return { record, definitions };
+}
+function sampledDetailsMarker(summary, key, sample, open) {
+  if (!summary || sample?.kind !== 'details-marker' || sample.open !== open || typeof open !== 'boolean') return { reason: 'SAMPLE_STATE_UNSUPPORTED' };
+  if (summary.style?.transform !== 'none' || summary.style?.direction === 'rtl' || summary.style?.writingMode && summary.style.writingMode !== 'horizontal-tb') return { reason: 'SUMMARY_GEOMETRY_UNSUPPORTED' };
+  const text = summary.children?.find(child => child.kind === 'text');
+  const r = summary.rect, t = text?.rect, width = sample.markerWidth ?? 8, height = sample.markerHeight ?? 8, color = validControlColor(summary.style?.color);
+  if (!r || !t || !color || !['x', 'y', 'width', 'height'].every(field => Number.isFinite(r[field]) && Number.isFinite(t[field]))) return { reason: 'SUMMARY_TEXT_UNKNOWN' };
+  const gap = t.x - r.x;
+  if (gap < width || height > r.height || t.y < r.y || t.y + t.height > r.y + r.height || t.x + t.width > r.x + r.width) return { reason: 'SUMMARY_MARKER_SPACE_UNKNOWN' };
+  if ((summary.children ?? []).some(child => child !== text && child.rect?.width > 0 && child.rect?.height > 0 && child.rect.x < t.x && child.rect.x + child.rect.width > r.x)) return { reason: 'SUMMARY_MARKER_SPACE_OCCUPIED' };
+  const x = (gap - width) / 2, y = t.y - r.y + (t.height - height) / 2;
+  if (y < 0 || y + height > r.height) return { reason: 'SUMMARY_MARKER_SPACE_UNKNOWN' };
+  const data = open ? `M 0 0 L ${width} 0 L ${width / 2} ${height} Z` : `M 0 0 L ${width} ${height / 2} L 0 ${height} Z`;
+  return { definition: { key: `${key}/sampled-marker`, name: 'Sampled summary marker', type: 'VECTOR', parentKey: key, x, y, width, height, props: { vectorPaths: [{ windingRule: 'NONZERO', data }], strokes: [], fills: paint(color) } } };
+}
 function singleBlockTextWidth(raw, ancestors) {
   const parent = ancestors.at(-1)?.raw, s = parent?.style ?? {};
   if (s.display !== 'block') return { reason: 'NOT_BLOCK_PARENT' };
@@ -220,7 +361,9 @@ export function adaptCaptures(captures, options = {}) {
   const paintOrder = paintOrderMode === 'positioned-siblings' ? { mode: paintOrderMode, changedParentCount: 0, changedParents: [], preservedCounts: {}, nativeVerification: 'NOT_RUN' } : null;
   const nativeControlsMode = options.nativeControls === undefined ? 'captured' : options.nativeControls;
   if (!['captured', 'sampled'].includes(nativeControlsMode)) throw new Error('nativeControls must be captured or sampled');
-  const nativeControls = nativeControlsMode === 'sampled' ? { mode: nativeControlsMode, progress: [], details: [], progressFillCount: 0, closedDetailsCount: 0, hiddenNodeCount: 0, nativeVisual: 'NOT_RUN' } : null;
+  const samples = controlSamples(options.nativeControlSamples, nativeControlsMode);
+  const usedSamples = new Set();
+  const nativeControls = nativeControlsMode === 'sampled' ? { mode: nativeControlsMode, progress: [], details: [], inputs: [], progressFillCount: 0, closedDetailsCount: 0, hiddenNodeCount: 0, sampledShapeCount: 0, nativeVisual: 'NOT_RUN' } : null;
   const fallback = options.fallbackFont ?? { family: 'Noto Sans SC', style: 'Regular' };
   const nodes = [], assets = [], warnings = [], mappings = [], scenes = []; const sceneIds = new Set(); const legacySceneIds = new Set(); const assetData = new Map(); const bySource = new Map();
   const warn = (sceneId, sourceId, code, detail = '') => warnings.push({ sceneId, sourceId, code, detail });
@@ -336,6 +479,16 @@ export function adaptCaptures(captures, options = {}) {
           }
         }
       }
+      if (nativeControls && raw.tag === 'input') {
+        const result = sampledInput(raw, key, sceneId, samples.get(key), warn);
+        if (result) {
+          if (samples.has(key)) usedSamples.add(key);
+          nativeControls.inputs.push(result.record);
+          for (const definition of result.definitions) add(definition);
+          nativeControls.sampledShapeCount += result.definitions.length;
+          return;
+        }
+      }
       if (['select', 'input', 'textarea'].includes(raw.tag) && raw.attrs?.value !== undefined) {
         const font = fontProperties(s, fallback), left = finite(s.paddingLeft, 4), right = finite(s.paddingRight, 4); const lineHeight = font.lineHeight.unit === 'PIXELS' ? font.lineHeight.value : font.fontSize * 1.2;
         add({ key: `${key}/value`, name: 'Editable field value', type: 'TEXT', parentKey: key, x: left, y: Math.max(0, (r.height - lineHeight) / 2), width: Math.max(1, r.width - left - right - (raw.tag === 'select' ? 20 : 0)), height: Math.max(1, lineHeight), props: { ...font, characters: String(raw.attrs.value) } });
@@ -345,17 +498,17 @@ export function adaptCaptures(captures, options = {}) {
       if (raw.tag === 'select') warn(sceneId, id, 'SELECT_VALUE_NOT_CAPTURED');
       if (['checkbox', 'radio'].includes(raw.attrs?.inputType)) { const dot = raw.attrs.inputType === 'radio'; add({ key: `${key}/choice`, name: raw.attrs.inputType, type: dot ? 'ELLIPSE' : 'RECTANGLE', parentKey: key, x: 0, y: 0, width: r.width, height: r.height, props: { fills: raw.attrs.checked ? paint(rgba(s.color) ?? { r: 0, g: 0, b: 0, a: 1 }) : [], strokes: paint(rgba(s.color) ?? { r: 0, g: 0, b: 0, a: 1 }), strokeWeight: 1 } }); warn(sceneId, id, 'NATIVE_CHOICE_STYLE_APPROXIMATED'); }
       if (raw.children !== undefined && !Array.isArray(raw.children)) throw new Error('Captured children must be an array');
-      let closedDetails = false, summary;
+      let closedDetails = false, summary, detailsRecord;
       if (nativeControls && raw.tag === 'details') {
         const source = nativeControlSource(raw, 'open');
         closedDetails = source.kind !== 'UNKNOWN' && raw.attrs?.open === false;
         summary = (raw.children ?? []).find(child => (child.kind ?? 'element') === 'element' && child.tag === 'summary');
         const record = { sceneId, sourceId: id, nodeKey: key, state: closedDetails ? 'CLOSED' : source.kind !== 'UNKNOWN' && raw.attrs?.open === true ? 'OPEN' : 'UNKNOWN', summaryKey: summary ? `${sceneId}/${safeKey(summary.id)}` : null, hiddenRootKeys: closedDetails ? (raw.children ?? []).filter(child => child !== summary).map(child => `${sceneId}/${safeKey(child.id)}`) : [], summaryMarker: 'UNKNOWN', sources: { open: source } };
+        detailsRecord = record;
         nativeControls.details.push(record);
         if (closedDetails) nativeControls.closedDetailsCount++;
         if (record.state === 'UNKNOWN') warn(sceneId, id, 'DETAILS_OPEN_UNKNOWN', source.reason ?? 'No boolean open state was captured');
         if (!summary) warn(sceneId, id, 'DETAILS_SUMMARY_UNKNOWN', 'Default summary text and its native marker were not captured');
-        warn(sceneId, id, 'DETAILS_MARKER_UNKNOWN', 'Native summary marker geometry was not independently captured');
       }
       // Geometry is measured at the captured scroll position. Preserve that visible
       // state and retain scroll metrics in the manifest instead of silently resetting.
@@ -377,11 +530,23 @@ export function adaptCaptures(captures, options = {}) {
           paintOrder.changedParents.push({ sceneId, parentSourceId: id, parentKey: node.key, beforeSourceIds: childRanges.map(range => range.raw.id), afterSourceIds: result.ordered.map(range => range.raw.id), zIndices: result.zIndices, ...(result.paintPhase ? { paintPhase: result.paintPhase, flowZIndices: result.flowZIndices } : {}) });
         } else paintOrder.preservedCounts[result.reason] = (paintOrder.preservedCounts[result.reason] ?? 0) + 1;
       }
+      if (detailsRecord) {
+        const sample = samples.get(key);
+        if (sample) usedSamples.add(key);
+        const marker = sampledDetailsMarker(summary, detailsRecord.summaryKey, sample, detailsRecord.state === 'UNKNOWN' ? undefined : raw.attrs?.open);
+        if (marker.definition && nodes.some(definition => definition.key === detailsRecord.summaryKey)) {
+          add(marker.definition); nativeControls.sampledShapeCount++;
+          detailsRecord.summaryMarker = 'APPROXIMATED'; detailsRecord.markerNodeKey = marker.definition.key;
+          detailsRecord.sources.marker = { kind: 'EXPLICIT_VISUAL_SAMPLE', approximation: true, evidence: structuredClone(sample.evidence), evidenceVerification: 'CALLER_ASSERTED' };
+          warn(sceneId, id, 'DETAILS_MARKER_APPROXIMATED', 'Editable triangle fits the measured leading text gap; native toggling is not implemented');
+        } else warn(sceneId, id, 'DETAILS_MARKER_UNKNOWN', marker.reason ?? 'Native summary marker geometry was not independently captured');
+      }
     }
     walk(capture.root, sceneFrame, { x: rootX, y: rootY });
     scenes.push({ id: sceneId, name: capture.name || sceneId, nodeKey: sceneKey, viewport: capture.viewport, nodeCount: nodes.length - sceneStart });
     for (const warning of capture.warnings ?? []) warn(sceneId, warning.nodeId ?? '', warning.code ?? 'CAPTURE_WARNING', warning.tag ?? '');
   });
+  for (const key of samples.keys()) if (!usedSamples.has(key)) throw new Error(`Invalid nativeControlSamples: unresolved control ${key}`);
   const reactions = [], unchangedPresetMappings = [], triggerKeys = new Set();
   for (const link of options.links ?? []) {
     const sourceKey = bySource.get(`${link.sceneId}/${link.sourceId}`); const destinationKey = sceneIds.has(link.targetSceneId) ? `${link.targetSceneId}/scene` : undefined;
