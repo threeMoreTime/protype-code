@@ -44,7 +44,33 @@ node capture/cli.mjs --input ../../.local/captures --output ../../.local/generat
 node capture/cli.mjs --input ../../.local/captures --index ../../.local/scene-index.json --links ../../.local/prototype-links.json --html-directory ../../.local/captures --assets-directory ../../.local/page-images --output ../../.local/generated-with-resources --flow-starts home,compact-home
 ```
 
-`--html-directory` 要求每个场景有同名 `.html` 文件。转换器只解析带 `data-design-id` 的 select/option/img，不运行脚本，也不从归档 HTML 推断 CSS 层叠或背景渐变。图像仅从内嵌 data URL，或明确指定的 `--assets-directory` 读取；后者只匹配 URL 中的精确文件名，不跟随网络地址或任意本地路径。PNG、JPEG、WebP 可嵌入资源；无法恢复的资源保留明确警告。
+`--html-directory` 要求每个场景有同名 `.html` 文件。转换器按 `data-design-id` 恢复 select/option/img，并补充 progress、details 属性及 radio/checkbox/color/range input 的声明元数据。input 的 `type/min/max/step` 和声明默认值另存为 `archivedControl`；HTML 的 `checked/value` 不代表当前表单状态，也不覆盖已有采集值。转换器不运行脚本、不实现通用 CSS 层叠或背景渐变推断；既有静态 CSS 恢复仅限已证明的 overlay 声明，以及 `.al-search-job-strip progress` 或 `.al-logical-job progress` 的 `accent-color: var(--accent)` 与唯一 `:root` 颜色声明。图像仅从内嵌 data URL，或明确指定的 `--assets-directory` 读取；后者只匹配 URL 中的精确文件名，不跟随网络地址或任意本地路径。PNG、JPEG、WebP 可嵌入资源；无法恢复的资源保留明确警告。
+
+## 可选的单行文字合并
+
+`--inline-text uniform-run` 只合并同一行、同字体和样式、位置连续的直接文字片段。首节点保留合并后的可编辑文字，原片段保留 key 并隐藏；默认模式保持原始拆分。左对齐保留原左边缘，居中和右对齐使用已测得的完整内容区，保留对应的原生对齐方式。
+
+右对齐还要求父节点与文字均为 `right`、LTR、水平排版。逻辑 `end`、RTL、多行、混合字体、未知 padding、越界、重叠及具有交互的片段均不合并。源码守卫和回归测试通过只证明转换行为；生成后的文字裁切、断行和页面布局仍须在 Figma 独立核验。
+
+## 可选的归档多行文字证明
+
+JavaScript API [applyArchiveInlineLineProof](../../.research/local-figma-bridge-poc/capture/archive-inline-lines.mjs) 接受 `{ capture, spec, mappings, proof, allowlist, enabled: true }`。只有显式开启并提供非空源节点 allowlist 才会派生；默认不执行。CLI 尚未接入此 API，没有对应开关。
+
+每个目标必须通过隔离、离线且禁用脚本的归档 HTML 重放证明：两次读回一致，原文字、字体与样式声明、逐字矩形、联合矩形、父级与页面几何、viewport 和 capture 内容哈希均精确匹配，不用容差或替换字体补证。文件字节哈希及浏览器隔离声明仍由调用方提供，API 不读取文件或认证浏览器会话。Unicode 字符须完整，不能在代理对中间拆行；交互目标、组件或实例内部节点及直接 CODE 文字保持原状。
+
+派生后保留原文字节点并隐藏，仅新增可编辑行节点，沿用原文字样式、颜色绑定和源行位置。新行紧邻原节点插入规格，保持它相对同父前后兄弟的层叠顺序；相邻 CODE 节点及其背景保留。2026-10-12 的定向内存转换仅有 8 个满足证明的目标生成 16 行；归档测量报告整体仍为 FAIL，不代表其余目标已获证明。输出 `nativeFit: NOT_RUN`，仍须对新行完成两次原生字体、宽度和行框量测，再做 Figma 视觉与交互验收。
+
+## 可选的原生控件外观
+
+`--native-controls sampled` 保留控件源 Frame，并用可编辑几何表达支持的 progress、radio、checkbox、color、range 与 details marker。外观均为 `APPROXIMATED`，不是浏览器控件皮肤或实际表单输入；原交互仍依赖显式场景映射，必须另行播放验收。默认 `captured` 模式保持原行为。
+
+归档 HTML 的 `type/min/max/step` 是结构或声明约束，`checked/value` 属性只是默认值。恢复结果另存为 `archivedControl`，不覆盖旧 `checked:null` 或真实采集值，也不读取任意 text/password/hidden 输入。实际捕获状态优先；畸形 checked、value 或范围不能由样本掩盖。重复属性标签中所有可识别的 `data-design-id` 均保留歧义，后续同 ID 的正常标签不能恢复为唯一来源。没有明确 min/max 的滑杆不假设 0–100，越界值不自动钳制；有限端点的跨度或偏移溢出时也记录 `RANGE_STATE_INVALID` 并省略形状。
+
+JavaScript API `adaptCaptures(captures, { nativeControls: 'sampled', nativeControlSamples })` 可显式提供按 `sceneId/sourceId` 索引的视觉样本。每项要求 `kind`、`approximation:true`、适用的 checked/value/open 与 `EXPLICIT_VISUAL_SAMPLE` 证据（参考 PNG、capture、HTML 的 SHA-256 及观察说明）。单选使用圆环和选中点，颜色使用矩形，滑杆使用轨道、填充与圆形 thumb；折叠三角还需已测得的 summary 前导空隙。未提供或矛盾的状态保留警告。
+
+样本哈希和观察属于调用方声明，清单标记 `evidenceVerification: CALLER_ASSERTED`，内存适配器不读取或独立核验这些文件；调用方须核对源文件与画面，再检查清单中的来源和 `nativeVisual: NOT_RUN`。CLI 尚无样本文件参数；不得把 API 样本能力写成自动视觉采样或已完成 Figma 验收。
+
+归档起始标签含不支持的属性语法、无法完整解析时，该 HTML 的原生控件声明恢复保守停止，保留原采集状态，避免后续重复 ID 被误判为唯一来源；不会通过宽松正则猜测引号内的 ID。
 
 ## 可选的设计系统提取
 
