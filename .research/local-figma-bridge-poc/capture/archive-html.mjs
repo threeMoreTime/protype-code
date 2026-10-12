@@ -40,23 +40,38 @@ function archivedOverlayDeclaration(html) {
     ? { kind: 'STATIC_CSS_DERIVED', selector: overlaySelector, positionDeclaration: 'position: absolute', declaration: 'z-index: 3' } : null;
 }
 function controlMarkup(html) {
-  const elements = new Map();
+  const elements = new Map(), ambiguousIds = new Set();
   const markup = inertMarkup(html).replace(/<style\b[^>]*>[^]*?<\/style>/gi, '');
   for (const match of markup.matchAll(/<([a-z][\w:-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi)) {
     const tag = match[1].toLowerCase(); const body = match[0].slice(match[1].length + 1, -1).replace(/\/\s*$/, '');
-    const attrs = {}; let index = 0; let valid = true;
+    const attrs = Object.create(null), ids = new Set(); let index = 0; let valid = true;
     const token = /\s+([a-zA-Z_:][\w:.-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/y;
     while (index < body.length) {
       if (!body.slice(index).trim()) break;
       token.lastIndex = index; const part = token.exec(body);
-      if (!part || Object.hasOwn(attrs, part[1].toLowerCase())) { valid = false; break; }
-      attrs[part[1].toLowerCase()] = decode(part[2] ?? part[3] ?? part[4] ?? ''); index = token.lastIndex;
+      if (!part) {
+        // A rejected token may precede the ID. Its identity cannot be proven
+        // without a complete parse, so no later tag may be treated as unique.
+        // This only disables native-control declaration recovery for this HTML.
+        return new Map();
+      }
+      const name = part[1].toLowerCase(), value = decode(part[2] ?? part[3] ?? part[4] ?? '');
+      if (name === 'data-design-id' && value) ids.add(value);
+      // Continue tokenizing duplicate attributes to collect every identifiable
+      // ID. Discarding the malformed tag must not make a later tag unique.
+      if (Object.hasOwn(attrs, name)) valid = false;
+      else attrs[name] = value;
+      index = token.lastIndex;
     }
-    if (!valid || !attrs['data-design-id']) continue;
+    if (!valid) { for (const id of ids) ambiguousIds.add(id); continue; }
+    if (!attrs['data-design-id']) continue;
     const id = attrs['data-design-id'];
     if (!elements.has(id)) elements.set(id, []);
     elements.get(id).push({ tag, attrs });
   }
+  // Empty entries deliberately fail every exact-one identity guard, including
+  // ancestor checks used by the conservative progress CSS recovery.
+  for (const id of ambiguousIds) elements.set(id, []);
   return elements;
 }
 function controlCssRules(html) {
@@ -131,6 +146,32 @@ function enrichNativeControls(result, html) {
   };
   function walk(node, ancestors = []) {
     const matches = elements.get(node.id);
+    if (node.tag === 'input' && matches?.length === 1 && matches[0].tag === 'input') {
+      const attrs = matches[0].attrs, type = attrs.type?.toLowerCase();
+      if (['radio', 'checkbox', 'color', 'range'].includes(type) && node.archivedControl === undefined) {
+        // HTML attributes describe declared defaults, not the live input
+        // properties. Keep legacy checked:null and captured values untouched.
+        const metadata = {};
+        const declared = (field, value, attribute) => {
+          if (value === undefined) return;
+          const present = Object.hasOwn(attrs, attribute);
+          metadata[field] = { value, evidence: { kind: 'HTML_ATTRIBUTE_DERIVED', nodeId: node.id, tag: 'input', attribute, present, ...(present ? { sourceValue: attrs[attribute] } : {}) } };
+        };
+        declared('inputType', type, 'type');
+        if (['radio', 'checkbox'].includes(type)) {
+          declared('defaultChecked', Object.hasOwn(attrs, 'checked'), 'checked');
+          if (typeof attrs.value === 'string' && attrs.value.length <= 256) declared('defaultValue', attrs.value, 'value');
+        } else if (type === 'color') {
+          if (/^#[0-9a-f]{6}$/i.test(attrs.value ?? '')) declared('defaultValue', attrs.value.toLowerCase(), 'value');
+        } else {
+          for (const field of ['min', 'max', 'step', 'value']) {
+            const value = number(attrs[field], -Infinity, false);
+            if (field !== 'step' || value > 0) declared(field === 'value' ? 'defaultValue' : field, value, field);
+          }
+        }
+        node.archivedControl = metadata;
+      }
+    }
     if (matches?.length === 1 && matches[0].tag === node.tag && ['progress', 'details'].includes(node.tag)) {
       const attrs = matches[0].attrs;
       if (node.tag === 'details') supplement(node, 'open', Object.hasOwn(attrs, 'open'), 'open', attrs.open, Object.hasOwn(attrs, 'open'));
