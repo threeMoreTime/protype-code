@@ -85,3 +85,23 @@ test('a symlinked src directory cannot expand the source read boundary', async (
     await assert.rejects(() => parseReactProject(dir), /No supported React source/);
   } finally { await rm(dir, { recursive: true, force: true }); await rm(external, { recursive: true, force: true }); }
 });
+
+test('static required booleans survive React extraction and dynamic rules require review', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'react-required-'));
+  try {
+    const file = path.join(dir, 'App.tsx');
+    const source = `import { Route, Routes } from 'react-router-dom';
+      function Form() { return <main><h1>申请</h1><input data-prototype-id="bare" aria-label="姓名" required/><input data-prototype-id="email" aria-label="邮箱" type="email" required={true}/><textarea data-prototype-id="note" aria-label="备注" required={false}/><select data-prototype-id="role" aria-label="职能" required={true}><option>研发</option></select><input data-prototype-id="optional" aria-label="选填"/></main>; }
+      export default function App() { return <Routes><Route path="/" element={<Form/>}/></Routes>; }`;
+    await writeFile(file, source);
+    const model = await parseReactProject(dir);
+    assert.deepEqual(Object.fromEntries(model.pages[0].elements.filter(e => e.kind === 'field').map(e => [e.id, e.required])), { bare: true, email: true, note: false, role: true, optional: false });
+    assert.equal(coverageReport(model).status, 'READY_FOR_REVIEW');
+    assert.ok(renderFigma(model).nodes.some(n => n.props.characters === '邮箱 *'));
+    await writeFile(file, source.replace('required={true}', 'required={mustProvideEmail}'));
+    const dynamic = await parseReactProject(dir);
+    assert.equal(dynamic.pages[0].elements.find(e => e.id === 'email').required, undefined);
+    assert.ok(dynamic.diagnostics.some(d => d.code === 'DYNAMIC_REQUIRED' && d.source.file === 'App.tsx'));
+    assert.equal(coverageReport(dynamic).status, 'NEEDS_REVIEW');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

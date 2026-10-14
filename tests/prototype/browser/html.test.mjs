@@ -95,3 +95,21 @@ test('a delivered model without flows opens its first default state and recovers
     assert.equal(await page.getByRole('status').count(), 0);
   });
 });
+
+test('React literal required flags reach native HTML validation', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'react-required-browser-'));
+  try {
+    await writeFile(path.join(dir, 'App.tsx'), `import { Route, Routes } from 'react-router-dom';
+      function Form() { return <><h1>联系信息</h1><input aria-label="邮箱" type="email" required={true}/><textarea aria-label="备注" required={false}/></>; }
+      export default function App() { return <Routes><Route path="/" element={<Form/>}/></Routes>; }`);
+    const model = await parseReactProject(dir);
+    await withPage(model, { width: 1000, height: 900 }, async page => {
+      const email = page.getByLabel('邮箱 *', { exact: true });
+      assert.equal(await email.evaluate(n => n.required), true);
+      assert.equal(await page.locator('form').evaluate(n => n.checkValidity()), false);
+      await email.fill('demo@example.test');
+      assert.equal(await page.getByLabel('备注', { exact: true }).evaluate(n => n.required), false);
+      assert.equal(await page.locator('form').evaluate(n => n.checkValidity()), true);
+    });
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
