@@ -6,6 +6,8 @@ npm run prototype -- --project examples/prototypes/content --id content-demo --o
 
 首版支持 React JSX/TSX、React Router 的静态 `<Route path element>` 和 `createBrowserRouter/createHashRouter` 对象数组。提取本地导入组件、标题、文本、静态列表、字段、Link/NavLink 以及单一路径的 `navigate('/path')` 点击处理。优先扫描 src，否则扫描项目根；不安装、不导入、不执行目标代码。跳过隐藏目录、依赖、构建目录、测试和符号链接；设置文件、字节和 AST 上限。
 
+字段必填支持裸写 `required` 和布尔字面量 `required={true}` / `required={false}`。其他表达式不会被执行或猜成确定的非必填规则，会记录 `DYNAMIC_REQUIRED` 并要求人工确认。
+
 不能确认的动态路由、条件视图、远程数据、组件 props、第三方组件、提交回调和权限进入 diagnostics。提取出的字段/内容需求来自代码证据，不是原 PRD 的完整性证明。入口、嵌套路由布局和动态状态需要人工核对。项目名称、选择器和领域不会影响解析逻辑。
 
 先由用户正常启动可信应用，再运行隔离 Chromium 采集：

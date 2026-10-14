@@ -8,6 +8,13 @@ const literal = n => n?.type === 'StringLiteral' ? n.value : n?.type === 'JSXExp
 const tagName = n => n?.openingElement?.name?.type === 'JSXIdentifier' ? n.openingElement.name.name : '';
 const attr = (node, name) => node.openingElement?.attributes.find(a => a.type === 'JSXAttribute' && a.name.name === name);
 const attrText = (node, name) => literal(attr(node, name)?.value);
+const attrBoolean = (node, name) => {
+  const attribute = attr(node, name);
+  if (!attribute) return false;
+  if (attribute.value === null) return true;
+  const expression = attribute.value?.expression;
+  return expression?.type === 'BooleanLiteral' ? expression.value : undefined;
+};
 const jsxText = node => (node?.children ?? []).map(c => c.type === 'JSXText' ? c.value : c.type === 'JSXElement' ? jsxText(c) : literal(c) ?? '').join(' ').replace(/\s+/g, ' ').trim();
 function visit(node, callback, depth = 0, budget = { count: 0 }) {
   if (!node || typeof node !== 'object') return;
@@ -174,7 +181,9 @@ export async function parseReactProject(directory, { id, name } = {}) {
           const label = attrText(current, 'aria-label') ?? labels.get(attrText(current, 'id')) ?? attrText(current, 'placeholder') ?? attrText(current, 'name') ?? '未命名字段';
           const fieldType = ['text', 'email', 'number', 'date', 'select', 'checkbox', 'textarea', 'password'].includes(type) ? type : 'text';
           const items = tag === 'select' ? current.children.filter(c => tagName(c) === 'option').map(jsxText).filter(Boolean) : undefined;
-          add({ kind: 'field', label, fieldType, required: Boolean(attr(current, 'required') && attr(current, 'required').value === null), ...(items ? { items } : {}) }, module, current); return false;
+          const required = attrBoolean(current, 'required');
+          if (required === undefined) diagnostic('DYNAMIC_REQUIRED', `字段“${label}”的 required 不是静态布尔值，必填规则需人工确认。`, module.file, current);
+          add({ kind: 'field', label, fieldType, ...(required === undefined ? {} : { required }), ...(items ? { items } : {}) }, module, current); return false;
         }
         if (['button', 'a'].includes(tag)) {
           const element = add({ kind: 'button', label: label || attrText(current, 'aria-label') || '未命名按钮' }, module, current);
