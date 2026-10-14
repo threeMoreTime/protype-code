@@ -51,9 +51,19 @@ export function captureDOM(options = {}) {
     if (['input', 'textarea', 'select'].includes(result.tag)) {
       const isChoice = ['checkbox', 'radio'].includes(element.type);
       if (isChoice) { result.attrs.inputType = element.type; return result; }
-      const value = result.tag === 'select' ? element.selectedOptions?.[0]?.textContent ?? '' : includeInputValues ? element.value || element.placeholder : element.placeholder || '';
+      const selected = result.tag === 'select' ? element.selectedOptions?.[0] : null;
+      const privateSelection = selected?.closest(privateSelector);
+      let selectionText = '';
+      if (selected && !privateSelection) {
+        // Selection labels bypass the normal child traversal. Apply the same
+        // privacy boundary to the option, its optgroup and nested label content.
+        const label = selected.cloneNode(true);
+        for (const child of label.querySelectorAll(privateSelector)) child.remove();
+        selectionText = label.textContent ?? '';
+      }
+      const value = result.tag === 'select' ? selectionText : includeInputValues ? element.value || element.placeholder : element.placeholder || '';
       result.attrs.value = clean(value); result.attrs.inputType = element.type;
-      result.attrs.valueCaptured = result.tag === 'select' || includeInputValues;
+      result.attrs.valueCaptured = result.tag === 'select' ? Boolean(selected && !privateSelection) : includeInputValues;
       return result;
     }
     for (const child of element.childNodes) {

@@ -10,6 +10,7 @@ import { parseReactProject } from '../../../prototype/inputs/react.mjs';
 import { renderHTML } from '../../../prototype/renderers/html.mjs';
 import { validatePrototype } from '../../../prototype/core/model.mjs';
 import { minimal } from '../fixtures.mjs';
+import { buildArtifacts } from '../../../prototype/pipeline.mjs';
 
 async function withPage(model, viewport, run) {
   const dir = await mkdtemp(path.join(tmpdir(), 'html-prototype-'));
@@ -77,4 +78,52 @@ test('malicious labels stay text under CSP, and declared timers transition corre
     assert.equal(await page.evaluate(() => window.__pwned), undefined);
     assert.equal(await page.locator('img').count(), 0);
   });
+});
+
+test('a delivered model without flows opens its first default state and recovers from an unknown hash', async () => {
+  const input = minimal(); input.flows = []; input.pages[0].states.reverse();
+  const { model, files } = buildArtifacts(input);
+  assert.ok(files.has('prototype.zip'));
+  await withPage(model, { width: 1000, height: 900 }, async page => {
+    assert.equal(await page.getByLabel('查看状态', { exact: true }).inputValue(), 'default');
+    await page.getByRole('button', { name: '提交', exact: true }).click();
+    await page.getByRole('status').waitFor();
+    assert.equal(await page.getByRole('status').textContent(), '成功');
+    await page.evaluate(() => { location.hash = 'missing/unknown'; });
+    await page.waitForFunction(() => document.querySelector('.state-switch select')?.value === 'default');
+    assert.equal(await page.getByRole('heading', { level: 2 }).textContent(), '申请');
+    assert.equal(await page.getByRole('status').count(), 0);
+  });
+});
+
+test('React literal required flags reach native HTML validation', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'react-required-browser-'));
+  try {
+    await writeFile(path.join(dir, 'App.tsx'), `import { Route, Routes } from 'react-router-dom';
+      function Form() { return <><h1>联系信息</h1><input aria-label="邮箱" type="email" required={true}/><textarea aria-label="备注" required={false}/></>; }
+      export default function App() { return <Routes><Route path="/" element={<Form/>}/></Routes>; }`);
+    const model = await parseReactProject(dir);
+    await withPage(model, { width: 1000, height: 900 }, async page => {
+      const email = page.getByLabel('邮箱 *', { exact: true });
+      assert.equal(await email.evaluate(n => n.required), true);
+      assert.equal(await page.locator('form').evaluate(n => n.checkValidity()), false);
+      await email.fill('demo@example.test');
+      assert.equal(await page.getByLabel('备注', { exact: true }).evaluate(n => n.required), false);
+      assert.equal(await page.locator('form').evaluate(n => n.checkValidity()), true);
+    });
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('React string-expression body text is visible in the delivered HTML', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'react-body-browser-'));
+  try {
+    await writeFile(path.join(dir, 'App.tsx'), `import { Route, Routes } from 'react-router-dom';
+      function Notice() { return <main><h1>服务申请</h1><p>{'必须先确认服务条款'}</p><div>请{'确认'}再继续</div></main>; }
+      export default function App() { return <Routes><Route path="/" element={<Notice/>}/></Routes>; }`);
+    const { model } = buildArtifacts(await parseReactProject(dir));
+    await withPage(model, { width: 1000, height: 900 }, async page => {
+      assert.equal(await page.getByText('必须先确认服务条款', { exact: true }).count(), 1);
+      assert.equal(await page.getByText('请确认再继续', { exact: true }).count(), 1);
+    });
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
