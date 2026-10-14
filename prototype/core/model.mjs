@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 // Business semantics live here; no Figma API, HTML, repository name or selectors.
-const id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}$/);
+const id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,39}$/);
 const text = z.string().min(1).max(4000);
 const refIds = z.array(id).max(500).default([]);
 const source = z.object({ file: text, line: z.number().int().positive().optional(), kind: z.enum(['prd', 'code', 'capture', 'manual']) }).strict();
@@ -15,12 +15,12 @@ const element = z.object({
 }).strict();
 const state = z.object({ id, label: text, kind: z.enum(['default', 'loading', 'error', 'empty', 'success', 'custom']), message: text.optional(), requirementIds: refIds }).strict();
 const page = z.object({
-  id, title: text, path: z.string().regex(/^\/(?!\/)[^\s?#]*$/).max(500),
+  id, title: z.string().min(1).max(200), path: z.string().regex(/^\/(?!\/)[^\s?#]*$/).max(500),
   viewport: z.object({ width: z.number().int().min(280).max(2560), height: z.number().int().min(400).max(2560) }).strict().default({ width: 1280, height: 800 }),
   elements: z.array(element).max(200), states: z.array(state).min(1).max(20), requirementIds: refIds, evidence,
 }).strict();
 export const PrototypeSchema = z.object({
-  schemaVersion: z.literal('1.0'), id, name: text,
+  schemaVersion: z.literal('1.0'), id, name: z.string().min(1).max(200),
   sources: z.array(z.object({ file: text, kind: source.shape.kind, sha256: z.string().regex(/^[0-9a-f]{64}$/) }).strict()).max(1000),
   requirements: z.array(z.object({ id, text, evidence }).strict()).max(2000),
   pages: z.array(page).min(1).max(100),
@@ -28,7 +28,7 @@ export const PrototypeSchema = z.object({
     id, pageId: id, elementId: id, fromState: id, targetPageId: id, targetState: id,
     trigger: z.enum(['click', 'submit', 'timeout']).default('click'), delaySeconds: z.number().min(0.1).max(60).optional(), requirementIds: refIds,
   }).strict()).max(2000),
-  flows: z.array(z.object({ id, name: text, startPageId: id, startState: id, actionIds: refIds }).strict()).max(100),
+  flows: z.array(z.object({ id, name: z.string().min(1).max(200), startPageId: id, startState: id, actionIds: refIds }).strict()).max(100),
   theme: z.object({ primary: z.string().regex(/^#[0-9a-fA-F]{6}$/), fontFamily: z.string().min(1).max(80) }).strict().default({ primary: '#315bea', fontFamily: 'Noto Sans SC' }),
   assumptions: z.array(text).max(500).default([]),
   diagnostics: z.array(z.object({ code: id, severity: z.enum(['info', 'warning', 'error']), message: text, source: source.optional(), requirementId: id.optional() }).strict()).max(3000).default([]),
@@ -36,6 +36,7 @@ export const PrototypeSchema = z.object({
 
 export function validatePrototype(input) {
   const model = PrototypeSchema.parse(input);
+  if (model.pages.reduce((n, p) => n + p.states.length, 0) > 200 || model.pages.reduce((n, p) => n + p.states.length * p.elements.length, 0) > 6000) throw new Error('Prototype render budget exceeded; split the project');
   const unique = (items, label, key = 'id') => {
     const values = items.map(item => item[key]);
     if (new Set(values).size !== values.length) throw new Error(`Duplicate ${label}`);

@@ -1,0 +1,34 @@
+import { mkdir, writeFile, rename, rm, lstat } from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { validatePrototype, digest } from './core/model.mjs';
+import { coverageReport } from './core/coverage.mjs';
+import { renderFigma } from './renderers/figma.mjs';
+
+export function buildArtifacts(input) {
+  const model = validatePrototype(input), spec = renderFigma(model), coverage = coverageReport(model);
+  const json = value => JSON.stringify(value, null, 2) + '\n';
+  const files = new Map([['prototype.json', json(model)], ['design-spec.json', json(spec)], ['coverage.json', json(coverage)], ['README.md', `# ${model.name}\n\nprototype.json 是可人工编辑的通用定义。design-spec.json 交给现有 Figma design_plan → design_apply → design_audit 流程。\n\n不要更改已有任务的授权范围；按 docs/guide/generation.md 创建新的交付任务。实际字体和原生节点仍须在 Figma 中验证。表单为模拟交互，不包含后端。\n\n需求状态：${coverage.status}。详见 coverage.json；映射关系不等于语义已验收。\n`]]);
+  const manifest = { schemaVersion: '1.0', projectId: model.id, revision: digest(model), files: [...files].map(([file, content]) => ({ file, sha256: digest(content), bytes: Buffer.byteLength(content) })), figma: { specId: spec.id, nativeVerification: 'NOT_RUN' } };
+  files.set('manifest.json', json(manifest));
+  return { model, spec, coverage, manifest, files };
+}
+
+export async function writeArtifacts(artifacts, output) {
+  const target = path.resolve(output);
+  if (await lstat(target).catch(error => { if (error.code !== 'ENOENT') throw error; return null; })) throw new Error('Output already exists; choose a new directory to preserve edits');
+  await mkdir(path.dirname(target), { recursive: true });
+  const staging = path.join(path.dirname(target), `.prototype-${randomUUID()}`);
+  await mkdir(staging);
+  try {
+    for (const [file, content] of artifacts.files) {
+      if (!/^[A-Za-z0-9_.\/-]+$/.test(file) || file.startsWith('/') || file.split('/').includes('..')) throw new Error('Unsafe output path');
+      const destination = path.join(staging, file); await mkdir(path.dirname(destination), { recursive: true }); await writeFile(destination, content, { flag: 'wx' });
+    }
+    // Reserve the final name, then publish files. Existing outputs are never replaced.
+    await mkdir(target);
+    try { for (const entry of await import('node:fs/promises').then(fs => fs.readdir(staging))) await rename(path.join(staging, entry), path.join(target, entry)); }
+    catch (error) { await rm(target, { recursive: true, force: true }); throw error; }
+  } finally { await rm(staging, { recursive: true, force: true }); }
+  return target;
+}
