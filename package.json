@@ -3,18 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "prototype": "node prototype/cli.mjs",
     "test:prototype": "node --test tests/prototype/*.test.mjs",
     "test:legacy": "node --test scripts/c2c-handoff.test.mjs && npm --prefix .research/local-figma-bridge-poc test",
     "test": "npm run test:prototype && npm run test:legacy",
     "setup": "npm ci && npm --prefix .research/local-figma-bridge-poc ci",
-    "check:bundle": "node .research/local-figma-bridge-poc/scripts/build-plugin-code.mjs --check"
+    "check:bundle": "node .research/local-figma-bridge-poc/scripts/build-plugin-code.mjs --check",
+    "capture": "node prototype/capture.mjs"
   },
   "dependencies": {
     "@babel/parser": "7.28.5",
     "linkedom": "0.18.12",
     "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
   }
 }

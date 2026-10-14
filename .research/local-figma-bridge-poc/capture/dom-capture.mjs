@@ -42,6 +42,7 @@ export function captureDOM(options = {}) {
     if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0 || bounds.width < 0.01 || bounds.height < 0.01) return null;
     const style = Object.fromEntries(cssKeys.map(key => [key, cs[key]]));
     const result = { id: next(), kind: 'element', tag: element.tagName.toLowerCase(), name: clean(element.getAttribute('aria-label') || element.getAttribute('title') || element.tagName.toLowerCase()), rect: rect(bounds), style, attrs: { role: element.getAttribute('role'), disabled: element.hasAttribute('disabled'), checked: element.checked === true, pressed: element.getAttribute('aria-pressed') }, scroll: { left: element.scrollLeft, top: element.scrollTop, width: element.scrollWidth, height: element.scrollHeight }, children: [] };
+    if (element.getAttribute('data-prototype-id')) result.attrs.prototypeId = clean(element.getAttribute('data-prototype-id'));
     if (result.tag === 'svg') { result.kind = 'svg'; result.svg = safeSVG(element, cs.color); return result; }
     if (result.tag === 'img') { result.kind = 'image'; result.dataUrl = image(element); return result; }
     if (['canvas', 'iframe', 'video'].includes(result.tag)) { warnings.push({ code: 'UNSUPPORTED_SURFACE', nodeId: result.id, tag: result.tag }); return result; }

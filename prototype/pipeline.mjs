@@ -3,13 +3,21 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validatePrototype, digest } from './core/model.mjs';
 import { coverageReport } from './core/coverage.mjs';
+import { applyRuntimeCaptures } from './inputs/captures.mjs';
 import { renderFigma } from './renderers/figma.mjs';
 
-export function buildArtifacts(input) {
-  const model = validatePrototype(input), spec = renderFigma(model), coverage = coverageReport(model);
+export function buildArtifacts(input, { captures } = {}) {
+  const model = validatePrototype(input), coverage = coverageReport(model);
+  const runtime = captures ? applyRuntimeCaptures(model, renderFigma(model), captures) : null;
+  const spec = runtime?.spec ?? renderFigma(model);
+  if (runtime) {
+    coverage.runtime = { applied: runtime.applied, warnings: runtime.warnings, htmlLayout: 'SEMANTIC_TEMPLATE' };
+    if (runtime.warnings.length) coverage.status = 'NEEDS_REVIEW';
+  }
   const json = value => JSON.stringify(value, null, 2) + '\n';
   const files = new Map([['prototype.json', json(model)], ['design-spec.json', json(spec)], ['coverage.json', json(coverage)], ['README.md', `# ${model.name}\n\nprototype.json 是可人工编辑的通用定义。design-spec.json 交给现有 Figma design_plan → design_apply → design_audit 流程。\n\n不要更改已有任务的授权范围；按 docs/guide/generation.md 创建新的交付任务。实际字体和原生节点仍须在 Figma 中验证。表单为模拟交互，不包含后端。\n\n需求状态：${coverage.status}。详见 coverage.json；映射关系不等于语义已验收。\n`]]);
-  const manifest = { schemaVersion: '1.0', projectId: model.id, revision: digest(model), files: [...files].map(([file, content]) => ({ file, sha256: digest(content), bytes: Buffer.byteLength(content) })), figma: { specId: spec.id, nativeVerification: 'NOT_RUN' } };
+  if (runtime) files.set('captures.json', json(runtime.attachments));
+  const manifest = { schemaVersion: '1.0', projectId: model.id, revision: spec.source.revision, files: [...files].map(([file, content]) => ({ file, sha256: digest(content), bytes: Buffer.byteLength(content) })), figma: { specId: spec.id, nativeVerification: 'NOT_RUN' } };
   files.set('manifest.json', json(manifest));
   return { model, spec, coverage, manifest, files };
 }
