@@ -12,6 +12,7 @@ import { parsePRD } from '../../prototype/inputs/prd.mjs';
 import { validatePrototype, digest } from '../../prototype/core/model.mjs';
 import { createZip, readZip } from '../../.research/local-figma-bridge-poc/delivery/zip.mjs';
 import { minimal } from './fixtures.mjs';
+import { coverageReport } from '../../prototype/core/coverage.mjs';
 
 test('HTML and DOCX PRDs preserve headings and literal text without executing embedded content', async () => {
   const html = '<h1>帮助中心</h1><h2>页面：首页 {#home} /</h2><p>内容：greeting | 欢迎 &amp; 使用</p><script>LEAK_SECRET()</script>';
@@ -28,6 +29,38 @@ test('HTML and DOCX PRDs preserve headings and literal text without executing em
   assert.throws(() => documentToText(createZip([['word/document.xml', '<!DOCTYPE x><w:p/>']]), '.docx'), /DTD/);
   assert.throws(() => documentToText(Buffer.from('not a zip'), '.docx'), /ZIP_/);
   assert.throws(() => documentToText(Buffer.from('%PDF'), '.pdf'), /Supported documents/);
+});
+
+test('HTML PRDs retain nested container text, inline labels and line breaks once in document order', () => {
+  const html = '<html><head><title>Not a requirement</title></head><body><h1>测试产品</h1><main><h2>页面：首页 {#home} /</h2><div><div>内容：notice | 必须<span>核验</span>身份</div><section><div>字段：email | 邮箱 | email | required</div></section><div>状态：success | 完成<br>提交：save | 保存 -> home/success</div></div></main><script>SECRET_SCRIPT()</script><div hidden>SECRET_HIDDEN</div><div data-capture-private>SECRET_PRIVATE</div></body></html>';
+  const extracted = documentToText(Buffer.from(html), '.html');
+  assert.equal(extracted, '# 测试产品\n## 页面：首页 {#home} /\n内容：notice | 必须核验身份\n字段：email | 邮箱 | email | required\n状态：success | 完成\n提交：save | 保存 -> home/success');
+  const model = parsePRD(extracted), artifacts = buildArtifacts(model);
+  assert.deepEqual(model.pages[0].elements.map(e => e.id), ['notice', 'email', 'save']);
+  assert.equal(model.pages[0].elements[1].required, true);
+  assert.equal(model.actions[0].targetState, 'success');
+  assert.ok(artifacts.spec.nodes.some(n => n.props.characters === '必须核验身份'));
+  assert.equal(artifacts.coverage.counts.unresolved, 0);
+});
+
+test('HTML text outside paragraph tags stays available for unresolved-requirement review', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'html-prd-'));
+  try {
+    const file = path.join(dir, 'requirements.html');
+    await writeFile(file, '<h1>产品</h1><h2>页面：首页 {#home} /</h2><div>需要执行复杂的身份核验。</div><custom-note>需要记录审计日志。</custom-note>');
+    const model = await loadDocument(file), report = coverageReport(model);
+    assert.equal(report.status, 'NEEDS_REVIEW'); assert.equal(report.counts.unresolved, 2);
+    assert.ok(model.requirements.some(r => r.text === '需要执行复杂的身份核验。'));
+    assert.ok(model.requirements.some(r => r.text === '需要记录审计日志。'));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('HTML tables retain pipe-separated rows without duplicate cell text', () => {
+  const extracted = documentToText(Buffer.from('<h2>页面：首页 {#home} /</h2><table><tr><td><div>字段：email</div></td><td><span>邮箱</span></td><td>email</td><td>required</td></tr></table>'), '.html');
+  const model = parsePRD(extracted);
+  assert.equal(model.pages[0].elements.length, 1);
+  assert.equal(model.pages[0].elements[0].id, 'email');
+  assert.equal(model.pages[0].elements[0].required, true);
 });
 
 test('three-way merge preserves human edits while applying independent requirement changes', () => {
