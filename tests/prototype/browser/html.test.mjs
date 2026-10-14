@@ -113,3 +113,17 @@ test('React literal required flags reach native HTML validation', async () => {
     });
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('React string-expression body text is visible in the delivered HTML', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'react-body-browser-'));
+  try {
+    await writeFile(path.join(dir, 'App.tsx'), `import { Route, Routes } from 'react-router-dom';
+      function Notice() { return <main><h1>服务申请</h1><p>{'必须先确认服务条款'}</p><div>请{'确认'}再继续</div></main>; }
+      export default function App() { return <Routes><Route path="/" element={<Notice/>}/></Routes>; }`);
+    const { model } = buildArtifacts(await parseReactProject(dir));
+    await withPage(model, { width: 1000, height: 900 }, async page => {
+      assert.equal(await page.getByText('必须先确认服务条款', { exact: true }).count(), 1);
+      assert.equal(await page.getByText('请确认再继续', { exact: true }).count(), 1);
+    });
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

@@ -154,7 +154,7 @@ export async function parseReactProject(directory, { id, name } = {}) {
         if (current.type === 'VariableDeclarator' && current.id.type === 'Identifier') handlers.set(current.id.name, current.init); if (current.type === 'FunctionDeclaration' && current.id) handlers.set(current.id.name, current); });
       visit(node, current => {
         if (['IfStatement', 'SwitchStatement', 'ConditionalExpression'].includes(current.type)) diagnostic('DYNAMIC_UI', '条件分支需要运行采集确认；静态展示不代表同时可见。', module.file, current);
-        if (current.type === 'JSXExpressionContainer' && !literal(current) && !['BooleanLiteral', 'NullLiteral'].includes(current.expression?.type)) {
+        if (current.type === 'JSXExpressionContainer' && literal(current) === undefined && !['BooleanLiteral', 'NullLiteral'].includes(current.expression?.type)) {
           diagnostic('DYNAMIC_UI', '表达式/条件内容仅静态扫描，需运行采集确认当前状态。', module.file, current);
         }
         if (current.type !== 'JSXElement') return;
@@ -198,7 +198,9 @@ export async function parseReactProject(directory, { id, name } = {}) {
         }
         if (['ul', 'ol'].includes(tag)) { const items = current.children.filter(c => tagName(c) === 'li').map(jsxText).filter(Boolean); if (items.length) add({ kind: 'list', label: attrText(current, 'aria-label') ?? '内容列表', items }, module, current); }
         if (['p', 'article', 'section', 'div', 'span'].includes(tag)) {
-          const direct = current.children.filter(c => c.type === 'JSXText').map(c => c.value).join(' ').replace(/\s+/g, ' ').trim();
+          // Only direct children belong to this element; nested elements are
+          // visited separately. String expressions are as static as JSX text.
+          const direct = current.children.map(c => c.type === 'JSXText' ? c.value : literal(c) ?? '').join('').replace(/\s+/g, ' ').trim();
           if (direct) add({ kind: 'text', label: direct }, module, current);
         }
       });
