@@ -8,6 +8,13 @@ const literal = n => n?.type === 'StringLiteral' ? n.value : n?.type === 'JSXExp
 const tagName = n => n?.openingElement?.name?.type === 'JSXIdentifier' ? n.openingElement.name.name : '';
 const attr = (node, name) => node.openingElement?.attributes.find(a => a.type === 'JSXAttribute' && a.name.name === name);
 const attrText = (node, name) => literal(attr(node, name)?.value);
+const attrBoolean = (node, name) => {
+  const attribute = attr(node, name);
+  if (!attribute) return false;
+  if (attribute.value === null) return true;
+  const expression = attribute.value?.expression;
+  return expression?.type === 'BooleanLiteral' ? expression.value : undefined;
+};
 const jsxText = node => (node?.children ?? []).map(c => c.type === 'JSXText' ? c.value : c.type === 'JSXElement' ? jsxText(c) : literal(c) ?? '').join(' ').replace(/\s+/g, ' ').trim();
 function visit(node, callback, depth = 0, budget = { count: 0 }) {
   if (!node || typeof node !== 'object') return;
@@ -147,7 +154,7 @@ export async function parseReactProject(directory, { id, name } = {}) {
         if (current.type === 'VariableDeclarator' && current.id.type === 'Identifier') handlers.set(current.id.name, current.init); if (current.type === 'FunctionDeclaration' && current.id) handlers.set(current.id.name, current); });
       visit(node, current => {
         if (['IfStatement', 'SwitchStatement', 'ConditionalExpression'].includes(current.type)) diagnostic('DYNAMIC_UI', '条件分支需要运行采集确认；静态展示不代表同时可见。', module.file, current);
-        if (current.type === 'JSXExpressionContainer' && !literal(current) && !['BooleanLiteral', 'NullLiteral'].includes(current.expression?.type)) {
+        if (current.type === 'JSXExpressionContainer' && literal(current) === undefined && !['BooleanLiteral', 'NullLiteral'].includes(current.expression?.type)) {
           diagnostic('DYNAMIC_UI', '表达式/条件内容仅静态扫描，需运行采集确认当前状态。', module.file, current);
         }
         if (current.type !== 'JSXElement') return;
@@ -174,7 +181,9 @@ export async function parseReactProject(directory, { id, name } = {}) {
           const label = attrText(current, 'aria-label') ?? labels.get(attrText(current, 'id')) ?? attrText(current, 'placeholder') ?? attrText(current, 'name') ?? '未命名字段';
           const fieldType = ['text', 'email', 'number', 'date', 'select', 'checkbox', 'textarea', 'password'].includes(type) ? type : 'text';
           const items = tag === 'select' ? current.children.filter(c => tagName(c) === 'option').map(jsxText).filter(Boolean) : undefined;
-          add({ kind: 'field', label, fieldType, required: Boolean(attr(current, 'required') && attr(current, 'required').value === null), ...(items ? { items } : {}) }, module, current); return false;
+          const required = attrBoolean(current, 'required');
+          if (required === undefined) diagnostic('DYNAMIC_REQUIRED', `字段“${label}”的 required 不是静态布尔值，必填规则需人工确认。`, module.file, current);
+          add({ kind: 'field', label, fieldType, ...(required === undefined ? {} : { required }), ...(items ? { items } : {}) }, module, current); return false;
         }
         if (['button', 'a'].includes(tag)) {
           const element = add({ kind: 'button', label: label || attrText(current, 'aria-label') || '未命名按钮' }, module, current);
@@ -189,7 +198,9 @@ export async function parseReactProject(directory, { id, name } = {}) {
         }
         if (['ul', 'ol'].includes(tag)) { const items = current.children.filter(c => tagName(c) === 'li').map(jsxText).filter(Boolean); if (items.length) add({ kind: 'list', label: attrText(current, 'aria-label') ?? '内容列表', items }, module, current); }
         if (['p', 'article', 'section', 'div', 'span'].includes(tag)) {
-          const direct = current.children.filter(c => c.type === 'JSXText').map(c => c.value).join(' ').replace(/\s+/g, ' ').trim();
+          // Only direct children belong to this element; nested elements are
+          // visited separately. String expressions are as static as JSX text.
+          const direct = current.children.map(c => c.type === 'JSXText' ? c.value : literal(c) ?? '').join('').replace(/\s+/g, ' ').trim();
           if (direct) add({ kind: 'text', label: direct }, module, current);
         }
       });
