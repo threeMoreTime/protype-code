@@ -7,9 +7,36 @@ import { digest, validatePrototype } from '../core/model.mjs';
 
 function htmlText(text) {
   const { document } = parseHTML(text);
-  for (const node of document.querySelectorAll('script,style,template,iframe,object,embed,[hidden],[data-capture-private]')) node.remove();
-  const blocks = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,tr')].filter(n => !n.parentElement?.closest('p,li,tr'));
-  return blocks.map(n => /^H[1-6]$/.test(n.tagName) ? `${'#'.repeat(Number(n.tagName[1]))} ${n.textContent.trim()}` : n.tagName === 'TR' ? [...n.children].map(c => c.textContent.trim()).join(' | ') : n.textContent.trim()).filter(Boolean).join('\n');
+  for (const node of document.querySelectorAll('head,script,style,template,iframe,object,embed,[hidden],[data-capture-private]')) node.remove();
+  const blocks = new Set(['HTML', 'BODY', 'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DD', 'DETAILS', 'DIALOG', 'DIV', 'DL', 'DT', 'FIELDSET', 'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM', 'HEADER', 'HGROUP', 'HR', 'LI', 'MAIN', 'NAV', 'OL', 'P', 'PRE', 'SECTION', 'SUMMARY', 'TABLE', 'TBODY', 'TFOOT', 'THEAD', 'UL']);
+  const normalize = value => value.replace(/\s+/g, ' ').trim();
+  const lines = [], pending = [document]; let inline = '';
+  const flush = () => { const value = normalize(inline); if (value) lines.push(value); inline = ''; };
+  // Walk every text node once, including text outside the familiar paragraph
+  // tags. Container boundaries become lines without duplicating nested text.
+  while (pending.length) {
+    const node = pending.pop();
+    if (node === null) { flush(); continue; }
+    if (node.nodeType === 3) { inline += node.textContent; continue; }
+    if (![1, 9, 11].includes(node.nodeType)) continue;
+    const tag = node.tagName;
+    if (tag === 'BR') { flush(); continue; }
+    if (/^H[1-6]$/.test(tag)) {
+      flush(); const value = normalize(node.textContent);
+      if (value) lines.push(`${'#'.repeat(Number(tag[1]))} ${value}`);
+      continue;
+    }
+    if (tag === 'TR') {
+      flush(); const cells = [...node.children].filter(c => ['TD', 'TH'].includes(c.tagName));
+      const value = cells.map(c => normalize(c.textContent)).join(' | ');
+      if (value) lines.push(value);
+      continue;
+    }
+    if (blocks.has(tag)) { flush(); pending.push(null); }
+    const children = [...node.childNodes];
+    for (let i = children.length - 1; i >= 0; i--) pending.push(children[i]);
+  }
+  flush(); return lines.join('\n');
 }
 function docxText(bytes) {
   const zip = readZip(bytes, { maxEntries: 1000, maxEntryBytes: 4 * 1024 * 1024, maxTotalBytes: 16 * 1024 * 1024 });
