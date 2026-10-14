@@ -10,6 +10,7 @@ import { parseReactProject } from '../../../prototype/inputs/react.mjs';
 import { renderHTML } from '../../../prototype/renderers/html.mjs';
 import { validatePrototype } from '../../../prototype/core/model.mjs';
 import { minimal } from '../fixtures.mjs';
+import { buildArtifacts } from '../../../prototype/pipeline.mjs';
 
 async function withPage(model, viewport, run) {
   const dir = await mkdtemp(path.join(tmpdir(), 'html-prototype-'));
@@ -76,5 +77,21 @@ test('malicious labels stay text under CSP, and declared timers transition corre
     await page.getByRole('status').waitFor(); assert.equal(await page.getByRole('status').textContent(), '成功');
     assert.equal(await page.evaluate(() => window.__pwned), undefined);
     assert.equal(await page.locator('img').count(), 0);
+  });
+});
+
+test('a delivered model without flows opens its first default state and recovers from an unknown hash', async () => {
+  const input = minimal(); input.flows = []; input.pages[0].states.reverse();
+  const { model, files } = buildArtifacts(input);
+  assert.ok(files.has('prototype.zip'));
+  await withPage(model, { width: 1000, height: 900 }, async page => {
+    assert.equal(await page.getByLabel('查看状态', { exact: true }).inputValue(), 'default');
+    await page.getByRole('button', { name: '提交', exact: true }).click();
+    await page.getByRole('status').waitFor();
+    assert.equal(await page.getByRole('status').textContent(), '成功');
+    await page.evaluate(() => { location.hash = 'missing/unknown'; });
+    await page.waitForFunction(() => document.querySelector('.state-switch select')?.value === 'default');
+    assert.equal(await page.getByRole('heading', { level: 2 }).textContent(), '申请');
+    assert.equal(await page.getByRole('status').count(), 0);
   });
 });
