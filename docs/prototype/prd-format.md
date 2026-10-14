@@ -8,7 +8,7 @@ npm run prototype -- --input examples/prototypes/admin/requirements.md --id admi
 
 交付包含 prototype.json（可人工编辑）、design-spec.json（现有 Figma 引擎输入）、coverage.json（逐条需求追溯/诊断）、manifest.json（内容摘要）。Figma 原生流程见 [generation](../guide/generation.md)。打开新的授权任务，依次 plan、apply、audit；不得用新内容复用旧 spec ID，也不能绕过人工编辑保护。
 
-首版是确定性解析器，没有调用外部 LLM。支持 `.md`、`.txt` 和完整 PrototypeSpec `.json`。清晰的页面/字段/状态/跳转可以自动建模；自由散文中的权限、计算、后台规则保留为未解析需求，不能声称已经实现。普通二级标题会作为推断页面并提示复核，三级标题不会另建页面。
+首版是确定性解析器，没有调用外部 LLM。支持 `.md`、`.txt`、`.html`、`.docx` 和完整 PrototypeSpec `.json`；[文档抽取边界](incremental.md)另有说明。清晰的页面/字段/状态/跳转可以自动建模；自由散文中的权限、计算、后台规则保留为未解析需求，不能声称已经实现。普通二级标题会作为推断页面并提示复核，三级标题不会另建页面。
 
 最小例子：
 

@@ -11,10 +11,11 @@
     "test:prototype": "node --test tests/prototype/*.test.mjs",
     "test:legacy": "node --test scripts/c2c-handoff.test.mjs && npm --prefix .research/local-figma-bridge-poc test",
     "test": "npm run test:prototype && npm run test:legacy",
-    "setup": "npm ci && npm --prefix .research/local-figma-bridge-poc ci",
+    "setup": "npm ci --ignore-scripts && npm --prefix .research/local-figma-bridge-poc ci --ignore-scripts && npm --prefix .research/local-figma-bridge-poc run build:plugin",
     "check:bundle": "node .research/local-figma-bridge-poc/scripts/build-plugin-code.mjs --check",
     "capture": "node prototype/capture.mjs",
-    "test:browser": "node --test --test-concurrency=1 tests/prototype/browser/*.test.mjs"
+    "test:browser": "node --test --test-concurrency=1 tests/prototype/browser/*.test.mjs",
+    "acceptance": "node scripts/verify-prototype.mjs"
   },
   "dependencies": {
     "@babel/parser": "7.28.5",

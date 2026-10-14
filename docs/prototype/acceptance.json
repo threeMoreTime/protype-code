@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "1.0",
+  "cases": [
+    {
+      "domain": "admin",
+      "input": "PRD only",
+      "counts": {
+        "requirements": 18,
+        "mapped": 18,
+        "unresolved": 0,
+        "pages": 2,
+        "states": 5,
+        "actions": 7
+      },
+      "editableNodes": 61,
+      "mappingStatus": "READY_FOR_REVIEW",
+      "schemaAndArchive": "PASS",
+      "unreachableStates": [
+        "members/empty",
+        "editor/error"
+      ],
+      "humanCorrections": "NOT_MEASURED",
+      "figmaNative": "NOT_RUN"
+    },
+    {
+      "domain": "mobile",
+      "input": "PRD only",
+      "counts": {
+        "requirements": 22,
+        "mapped": 22,
+        "unresolved": 0,
+        "pages": 3,
+        "states": 7,
+        "actions": 8
+      },
+      "editableNodes": 74,
+      "mappingStatus": "READY_FOR_REVIEW",
+      "schemaAndArchive": "PASS",
+      "unreachableStates": [
+        "venues/loading",
+        "venues/empty",
+        "booking/error",
+        "confirmation/default"
+      ],
+      "humanCorrections": "NOT_MEASURED",
+      "figmaNative": "NOT_RUN"
+    },
+    {
+      "domain": "content",
+      "input": "React TSX",
+      "counts": {
+        "requirements": 12,
+        "mapped": 12,
+        "unresolved": 0,
+        "pages": 3,
+        "states": 3,
+        "actions": 4
+      },
+      "editableNodes": 27,
+      "mappingStatus": "READY_FOR_REVIEW",
+      "schemaAndArchive": "PASS",
+      "unreachableStates": [],
+      "humanCorrections": "NOT_MEASURED",
+      "figmaNative": "NOT_RUN"
+    }
+  ],
+  "meaning": "结构、引用、需求映射、可编辑节点和打包校验；不替代真实浏览器、人工需求评审或 Figma 原生验收。"
+}

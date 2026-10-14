@@ -52,3 +52,11 @@ test('delivery writes hashes and refuses existing destinations without losing ma
     assert.ok((await readdir(output)).includes('design-spec.json'));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('user control IDs cannot collide with renderer nodes; custom Chinese states keep resolvable identities', () => {
+  const model = parsePRD('页面：审批 {#approval} /approval\n状态：待审核\n按钮：title | 提交审核 -> approval/待审核\n交互：title@待审核 -> approval/default');
+  const spec = renderFigma(model);
+  assert.equal(spec.reactions.length, 2);
+  assert.equal(new Set(spec.nodes.map(n => n.key)).size, spec.nodes.length);
+  assert.ok(model.pages[0].states.some(s => s.label === '待审核' && s.kind === 'custom'));
+});

@@ -2,7 +2,7 @@ import { digest, stableId, validatePrototype } from '../core/model.mjs';
 
 const stateNames = new Map(Object.entries({ 默认: 'default', 正常: 'default', 加载中: 'loading', 加载: 'loading', 空: 'empty', 空状态: 'empty', 失败: 'error', 错误: 'error', 成功: 'success' }));
 const knownStates = new Set(['default', 'loading', 'empty', 'error', 'success']);
-const stateId = value => stateNames.get(value.trim()) ?? value.trim();
+const stateId = value => stateNames.get(value.trim()) ?? (/^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$/.test(value.trim()) ? value.trim() : stableId('state', value.trim()));
 const plain = value => value.replace(/\*\*|`/g, '').trim();
 const explicitName = (value, prefix) => {
   const match = /\s*\{#([A-Za-z0-9][A-Za-z0-9_.-]{0,39})\}/.exec(value);

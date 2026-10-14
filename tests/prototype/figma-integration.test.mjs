@@ -8,7 +8,7 @@ import { fixture, complete } from '../../.research/local-figma-bridge-poc/tests/
 
 for (const domain of ['admin', 'mobile', 'content']) test(`${domain} output completes existing Figma API-double apply/audit and preserves human-edit guard`, async () => {
   const base = new URL(`../../examples/prototypes/${domain}`, import.meta.url);
-  const model = domain === 'content' ? await parseReactProject(base.pathname) : parsePRD(await readFile(new URL(`${base.href}/requirements.md`), 'utf8'));
+  const model = domain === 'content' ? await parseReactProject(base) : parsePRD(await readFile(new URL(`${base.href}/requirements.md`), 'utf8'));
   const spec = renderFigma(model), f = fixture();
   const before = f.writes();
   assert.equal((await f.run('scope_design_plan', spec)).status, 'PLANNED'); assert.equal(f.writes(), before);
