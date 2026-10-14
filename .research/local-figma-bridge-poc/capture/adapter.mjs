@@ -1,3 +1,4 @@
+import { acceptsAccentEvidence, isUnchangedPreset } from './adapters/archivelens/policy.mjs';
 import { validateDesignSpec } from '../design/spec.mjs';
 import { readSimpleSVG } from './svg.mjs';
 import { parseLinearGradient } from './linear-gradient.mjs';
@@ -53,7 +54,7 @@ function nativeControlSource(raw, field, style = false) {
   if (evidence === undefined) return { kind: 'CAPTURED' };
   let supported = evidence && typeof evidence === 'object' && evidence.nodeId === raw.id;
   if (style) {
-    supported &&= evidence.kind === 'STATIC_CSS_DERIVED' && ['.al-search-job-strip progress', '.al-logical-job progress'].includes(evidence.selector)
+    supported &&= evidence.kind === 'STATIC_CSS_DERIVED' && acceptsAccentEvidence(evidence)
       && evidence.declaration === 'accent-color: var(--accent)' && evidence.variableSelector === ':root' && evidence.variableDeclaration === `--accent: ${value}`
       && Array.isArray(evidence.matchingInlineAncestors) && evidence.matchingInlineAncestors.every(id => typeof id === 'string');
   } else {
@@ -556,7 +557,7 @@ export function adaptCaptures(captures, options = {}) {
     // Legacy ArchiveLens links use self-mappings to preserve the captured preset,
     // not to demonstrate the auxiliary command's outcome. Keep that provenance
     // without creating a native navigation that the original delivery omitted.
-    if (legacySceneIds.has(link.sceneId) && link.sceneId === link.targetSceneId && trigger.type === 'ON_CLICK') {
+    if (isUnchangedPreset(legacySceneIds.has(link.sceneId), link, trigger)) {
       unchangedPresetMappings.push({ mapping: { ...link }, sourceKey, destinationKey, reason: 'Same archived captured preset; native self-navigation omitted. Auxiliary action outcome is not demonstrated.' });
       continue;
     }
@@ -564,7 +565,7 @@ export function adaptCaptures(captures, options = {}) {
   }
   const starts = options.flowStarts ?? [scenes[0].id];
   const capturedAt = options.capturedAt ?? captures[0].source?.capturedAt;
-  const spec = { schemaVersion: '1.0', id: options.id ?? 'captured-design', name: options.name ?? 'Captured editable prototype', source: { revision: options.revision ?? captures[0].source?.revision ?? 'unknown', ...(capturedAt ? { capturedAt } : {}), adapter: 'dom-archivelens-1.0' }, fontPolicy: { allowFallback: true, fallback }, nodes, assets, textStyles: [], variables: [], reactions, flows: starts.map(id => { const scene = scenes.find(scene => scene.id === id); if (!scene) throw new Error(`Unknown flow start ${id}`); return { nodeKey: scene.nodeKey, name: scene.name }; }) };
+  const spec = { schemaVersion: '1.0', id: options.id ?? 'captured-design', name: options.name ?? 'Captured editable prototype', source: { revision: options.revision ?? captures[0].source?.revision ?? 'unknown', ...(capturedAt ? { capturedAt } : {}), adapter: legacySceneIds.size ? 'dom-archivelens-1.0' : 'dom-capture-1.0' }, fontPolicy: { allowFallback: true, fallback }, nodes, assets, textStyles: [], variables: [], reactions, flows: starts.map(id => { const scene = scenes.find(scene => scene.id === id); if (!scene) throw new Error(`Unknown flow start ${id}`); return { nodeKey: scene.nodeKey, name: scene.name }; }) };
   if (nativeControls) nativeControls.hiddenNodeCount = nodes.filter(node => node.props.visible === false).length;
   const inlineText = inlineTextMode === 'uniform-run' ? coalesceUniformInlineText(captures, spec, mappings, unchangedPresetMappings) : null;
   validateDesignSpec(spec);

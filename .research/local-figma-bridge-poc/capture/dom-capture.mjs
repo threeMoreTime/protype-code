@@ -9,6 +9,26 @@ export function captureDOM(options = {}) {
   if (!rootElement) throw new Error('Capture root not found');
   const warnings = []; let seq = 0;
   const clean = text => redactions.reduce((value, rule) => { if (!rule || typeof rule.from !== 'string' || !rule.from || typeof rule.to !== 'string') throw new Error('Invalid literal redaction'); return value.split(rule.from).join(rule.to); }, String(text ?? ''));
+  clean(''); // Validate even when the page contains no readable text.
+  const privateSelector = '[data-capture-private],input[type="password"],input[type="hidden"]';
+  if (rootElement.closest?.(privateSelector)) throw new Error('Capture root is private');
+  function safeSVG(element, color) {
+    const clone = element.cloneNode(true);
+    const pending = [clone]; let count = 0;
+    while (pending.length) {
+      const node = pending.pop();
+      if (++count > maxNodes) throw new Error('SVG node budget exceeded');
+      if (node.nodeType === Node.TEXT_NODE) { node.textContent = clean(node.textContent); continue; }
+      if (!(node instanceof Element)) { node.remove(); continue; }
+      if (node !== clone && node.matches(`${privateSelector},script,style,foreignObject,image,use,animate,animateMotion,animateTransform,set`)) { node.remove(); continue; }
+      for (const attribute of [...node.attributes]) {
+        if (/^on/i.test(attribute.name) || /^(?:href|xlink:href|style)$/i.test(attribute.name) || /url\s*\(/i.test(attribute.value)) node.removeAttribute(attribute.name);
+        else node.setAttribute(attribute.name, clean(attribute.value.replaceAll('currentColor', color)));
+      }
+      pending.push(...node.childNodes);
+    }
+    return new XMLSerializer().serializeToString(clone);
+  }
   const cssKeys = ['display', 'position', 'zIndex', 'accentColor', 'opacity', 'backgroundColor', 'color', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderTopStyle', 'borderTopLeftRadius', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'textAlign', 'whiteSpace', 'overflowX', 'overflowY', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'boxShadow', 'transform', 'objectFit', 'backgroundImage', 'backgroundSize', 'backgroundRepeat', 'backgroundPosition', 'backgroundOrigin', 'backgroundClip', 'backgroundAttachment', 'backgroundBlendMode'];
   const rect = r => ({ x: r.x, y: r.y, width: r.width, height: r.height });
   const next = () => { if (++seq > maxNodes) throw new Error('Capture node budget exceeded'); return `d${seq}`; };
@@ -22,7 +42,7 @@ export function captureDOM(options = {}) {
     if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0 || bounds.width < 0.01 || bounds.height < 0.01) return null;
     const style = Object.fromEntries(cssKeys.map(key => [key, cs[key]]));
     const result = { id: next(), kind: 'element', tag: element.tagName.toLowerCase(), name: clean(element.getAttribute('aria-label') || element.getAttribute('title') || element.tagName.toLowerCase()), rect: rect(bounds), style, attrs: { role: element.getAttribute('role'), disabled: element.hasAttribute('disabled'), checked: element.checked === true, pressed: element.getAttribute('aria-pressed') }, scroll: { left: element.scrollLeft, top: element.scrollTop, width: element.scrollWidth, height: element.scrollHeight }, children: [] };
-    if (result.tag === 'svg') { result.kind = 'svg'; result.svg = new XMLSerializer().serializeToString(element).replaceAll('currentColor', cs.color); return result; }
+    if (result.tag === 'svg') { result.kind = 'svg'; result.svg = safeSVG(element, cs.color); return result; }
     if (result.tag === 'img') { result.kind = 'image'; result.dataUrl = image(element); return result; }
     if (['canvas', 'iframe', 'video'].includes(result.tag)) { warnings.push({ code: 'UNSUPPORTED_SURFACE', nodeId: result.id, tag: result.tag }); return result; }
     if (result.tag === 'progress') { result.attrs.value = element.value; result.attrs.max = element.max; result.attrs.indeterminate = !element.hasAttribute('value'); }

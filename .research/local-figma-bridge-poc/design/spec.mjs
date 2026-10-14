@@ -1,3 +1,4 @@
+import { isBase64 } from './base64.mjs';
 // The same bounded, data-only contract is validated in Node and the Figma plugin.
 export const DESIGN_SPEC_VERSION = '1.0';
 export const DESIGN_SPEC_LIMITS = Object.freeze({ nodes: 25000, assets: 2000, reactions: 30000, assetBytes: 20 * 1024 * 1024, totalAssetBytes: 80 * 1024 * 1024 });
@@ -37,7 +38,7 @@ export function validateDesignSpec(spec) {
   for (const [v, p] of entries('assets', DESIGN_SPEC_LIMITS.assets)) if (object(v, p, ['key', 'mimeType', 'dataBase64'])) {
     en(v.mimeType, `${p}.mimeType`, ['image/png', 'image/jpeg', 'image/webp']);
     string(v.dataBase64, `${p}.dataBase64`, Math.ceil(DESIGN_SPEC_LIMITS.assetBytes / 3) * 4);
-    if (typeof v.dataBase64 === 'string') { if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(v.dataBase64)) issue(`${p}.dataBase64`, 'Invalid base64'); totalAssetBytes += Math.floor(v.dataBase64.length * 3 / 4); const signature = { 'image/png': /^iVBORw0KGgo/, 'image/jpeg': /^\/9j\//, 'image/webp': /^UklGR/ }[v.mimeType]; if (signature && !signature.test(v.dataBase64)) issue(`${p}.dataBase64`, 'Image signature does not match MIME type'); }
+    if (typeof v.dataBase64 === 'string') { if (!isBase64(v.dataBase64)) issue(`${p}.dataBase64`, 'Invalid base64'); totalAssetBytes += Math.floor(v.dataBase64.length * 3 / 4); const signature = { 'image/png': /^iVBORw0KGgo/, 'image/jpeg': /^\/9j\//, 'image/webp': /^UklGR/ }[v.mimeType]; if (signature && !signature.test(v.dataBase64)) issue(`${p}.dataBase64`, 'Image signature does not match MIME type'); }
   }
   if (totalAssetBytes > DESIGN_SPEC_LIMITS.totalAssetBytes) issue('$.assets', 'Total asset byte budget exceeded');
   for (const [v, p] of entries('variables', 5000)) if (object(v, p, ['key', 'name', 'value'])) { string(v.name, `${p}.name`, 256); color(v.value, `${p}.value`, true); }
