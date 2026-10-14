@@ -5,7 +5,7 @@ const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', 
 function startPrototype(model) {
   const root = document.getElementById('app'), draft = new Map(); let timer;
   const create = (tag, text, className) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (className) n.className = className; return n; };
-  const defaultFlow = model.flows[0];
+  const defaultFlow = model.flows[0] ?? { startPageId: model.pages[0].id, startState: 'default' };
   const resolve = () => {
     const [pid, sid] = location.hash.slice(1).split('/');
     const page = model.pages.find(p => p.id === pid) ?? model.pages.find(p => p.id === defaultFlow.startPageId);
