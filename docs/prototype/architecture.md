@@ -15,4 +15,6 @@ ArchiveLens 的归档 CSS 和原生控件补充规则隔离在 `capture/adapters
 | renderers | 可编辑节点、HTML 模拟交互 | 后端功能、真实账号和数据 |
 | existing bridge | 现有 DesignSpec 和授权流程 | 推断需求、绕过文件和节点范围 |
 
+输入：inputs/prd.mjs、inputs/documents.mjs、inputs/react.mjs；输出：renderers/figma.mjs、renderers/html.mjs；增量：core/merge.mjs；交付：pipeline.mjs。
+
 Node 22.18+；根目录安装产品解析器，桥接目录保留独立依赖和测试。仓库不保存输入项目的秘密文件或真实运行截图。

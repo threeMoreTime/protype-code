@@ -11,7 +11,7 @@ import { minimal, capture } from './fixtures.mjs';
 import { validatePrototype } from '../../prototype/core/model.mjs';
 
 test('content project: JSX routes, imported components and content navigation are extracted without execution', async () => {
-  const model = await parseReactProject(new URL('../../examples/prototypes/content', import.meta.url).pathname, { id: 'content' });
+  const model = await parseReactProject(new URL('../../examples/prototypes/content', import.meta.url), { id: 'content' });
   assert.deepEqual(model.pages.map(p => p.path).sort(), ['/', '/about', '/article']);
   assert.equal(model.actions.length, 4);
   assert.ok(model.pages.find(p => p.path === '/').elements.some(e => e.label.includes('社区内容站')));
@@ -55,4 +55,33 @@ test('runtime captures replace template geometry and retain links only with expl
   assert.throws(() => applyRuntimeCaptures(model, spec, input), /elementMap/);
   input.snapshots[0].pageId = 'missing';
   assert.throws(() => applyRuntimeCaptures(model, spec, input), /Unknown/);
+});
+
+test('only imported router navigation is trusted, aliases work and dynamic path declarations do not invent pages', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'react-router-evidence-'));
+  try {
+    await mkdir(path.join(dir, 'src'));
+    await writeFile(path.join(dir, 'src', 'App.tsx'), `
+      import { Routes, Route, useNavigate } from 'react-router-dom';
+      function Home() { const go = useNavigate(); function navigate(x) { console.log(x); }
+        return <main><h1>首页</h1><button data-prototype-id="real" onClick={() => go('/about')}>真的导航</button><button onClick={() => navigate('/about')}>同名普通函数</button></main>;
+      }
+      function About() { return <h1>关于</h1>; }
+      export default function App() { return <Routes><Route path="/" element={<Home/>}/><Route path="/about" element={<About/>}/><Route path={unknownPath} element={<About/>}/></Routes>; }
+    `);
+    const model = await parseReactProject(dir);
+    assert.equal(model.pages.length, 2); assert.equal(model.actions.length, 1);
+    assert.equal(model.actions[0].elementId, 'real');
+    assert.ok(model.diagnostics.some(d => d.code === 'DYNAMIC_ROUTE'));
+    assert.ok(model.diagnostics.some(d => d.code === 'UNRESOLVED_ACTION'));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('a symlinked src directory cannot expand the source read boundary', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'react-boundary-')), external = await mkdtemp(path.join(tmpdir(), 'react-outside-'));
+  try {
+    await writeFile(path.join(external, 'App.tsx'), 'export default () => <h1>OUTSIDE</h1>');
+    await symlink(external, path.join(dir, 'src'));
+    await assert.rejects(() => parseReactProject(dir), /No supported React source/);
+  } finally { await rm(dir, { recursive: true, force: true }); await rm(external, { recursive: true, force: true }); }
 });

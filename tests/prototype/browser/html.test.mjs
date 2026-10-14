@@ -59,7 +59,7 @@ test('mobile HTML: appointment path, success state, return path and responsive v
 });
 
 test('React content HTML: extracted links navigate between article and home', async () => {
-  const model = await parseReactProject(new URL('../../../examples/prototypes/content', import.meta.url).pathname);
+  const model = await parseReactProject(new URL('../../../examples/prototypes/content', import.meta.url));
   await withPage(model, { width: 1280, height: 900 }, async page => {
     await page.getByRole('button', { name: '阅读市集指南', exact: true }).click();
     await page.getByRole('heading', { level: 2, name: '周末市集指南' }).waitFor();

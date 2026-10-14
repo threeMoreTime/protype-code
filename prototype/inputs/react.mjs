@@ -1,4 +1,4 @@
-import { readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { readdir, readFile, realpath, stat, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from '@babel/parser';
 import { digest, stableId, validatePrototype } from '../core/model.mjs';
@@ -52,7 +52,7 @@ export async function parseReactProject(directory, { id, name } = {}) {
     }
   }
   const src = path.join(root, 'src');
-  await scan(await stat(src).then(s => s.isDirectory() ? src : root).catch(() => root));
+  await scan(await lstat(src).then(s => s.isDirectory() && !s.isSymbolicLink() ? src : root).catch(() => root));
   if (!modules.size) throw new Error('No supported React source files found');
   const resolveImport = (module, local) => {
     const imported = module.imports.get(local);
@@ -74,9 +74,10 @@ export async function parseReactProject(directory, { id, name } = {}) {
       if (imported?.name === 'Route' && /^react-router(?:-dom)?$/.test(imported.from)) {
         const part = attrText(node, 'path');
         if (part === undefined && !attr(node, 'index')) { diagnostic('DYNAMIC_ROUTE', '无静态路径的布局/动态 Route 需运行采集确认。', module.file, node); }
+        if (attr(node, 'path') && part === undefined) return;
         const route = part === undefined ? parent || '/' : routePath(parent, part) || '/';
         const element = attr(node, 'element')?.value?.expression, Component = attr(node, 'Component')?.value?.expression;
-        if (element || Component) routeDefinitions.push({ route, module, node: element ?? Component });
+        if ((element || Component) && (part !== undefined || attr(node, 'index'))) routeDefinitions.push({ route, module, node: element ?? Component });
         for (const child of node.children) jsxRoutes(child, module, route);
         return;
       }
@@ -94,7 +95,8 @@ export async function parseReactProject(directory, { id, name } = {}) {
       const props = new Map(entry.properties.filter(p => p.type === 'ObjectProperty' && !p.computed).map(p => [p.key.name ?? p.key.value, p.value]));
       const part = literal(props.get('path')), route = part === undefined ? parent || '/' : routePath(parent, part);
       const element = props.get('element') ?? props.get('Component');
-      if (element) routeDefinitions.push({ route, module, node: element });
+      if (props.has('path') && part === undefined) { diagnostic('DYNAMIC_ROUTE', '动态对象路由路径无法解析。', module.file, entry); continue; }
+      if (element && (part !== undefined || props.get('index')?.value === true)) routeDefinitions.push({ route, module, node: element });
       if (props.has('children')) objectRoutes(props.get('children'), module, route);
     }
   }
@@ -120,7 +122,7 @@ export async function parseReactProject(directory, { id, name } = {}) {
     const page = { id: stableId('page', definition.route), title: definition.route === '/' ? model.name : definition.route, path: definition.route, elements: [], states: [{ id: 'default', label: '默认', kind: 'default' }], requirementIds: [], evidence: [{ file: relative(definition.module.file), line: definition.node?.loc?.start.line ?? 1, kind: 'code' }] };
     model.pages.push(page); const seen = new Set(), occurrences = new Map();
     const add = (element, module, node) => {
-      const base = element.id ?? stableId('element', `${relative(module.file)}:${element.kind}:${element.label}`);
+      const base = element.id ?? attrText(node, 'data-prototype-id') ?? stableId('element', `${relative(module.file)}:${element.kind}:${element.label}`);
       const n = occurrences.get(base) ?? 0; occurrences.set(base, n + 1); element.id = n ? stableId('element', `${base}:${n}`) : base;
       const req = { id: stableId('req', `${page.id}/${element.id}`), text: `代码界面：${element.label}`, evidence: [{ file: relative(module.file), line: node.loc?.start.line ?? 1, kind: 'code' }] };
       model.requirements.push(req); page.elements.push({ ...element, requirementIds: [req.id], evidence: req.evidence }); return element;
@@ -133,11 +135,16 @@ export async function parseReactProject(directory, { id, name } = {}) {
         if (resolved) return expand(resolved.node, resolved.module, depth + 1);
       }
       const identity = `${module.file}:${node.start}`;
-      if (seen.has(identity)) return; seen.add(identity);
+      if (seen.has(identity)) { diagnostic('REPEATED_COMPONENT', '同一组件多次引用或循环依赖，当前仅展开一次；需运行采集确认实例。', module.file, node); return; } seen.add(identity);
       const labels = new Map();
       visit(node, current => { if (tagName(current) === 'label' && attrText(current, 'htmlFor')) labels.set(attrText(current, 'htmlFor'), jsxText(current)); });
-      const handlers = new Map(module.locals);
-      visit(node, current => { if (current.type === 'VariableDeclarator' && current.id.type === 'Identifier') handlers.set(current.id.name, current.init); if (current.type === 'FunctionDeclaration' && current.id) handlers.set(current.id.name, current); });
+      const handlers = new Map(module.locals), navigateBindings = new Set();
+      visit(node, current => {
+        if (current.type === 'VariableDeclarator' && current.id.type === 'Identifier' && current.init?.type === 'CallExpression') {
+          const imported = module.imports.get(current.init.callee?.name);
+          if (imported?.name === 'useNavigate' && /^react-router(?:-dom)?$/.test(imported.from)) navigateBindings.add(current.id.name);
+        }
+        if (current.type === 'VariableDeclarator' && current.id.type === 'Identifier') handlers.set(current.id.name, current.init); if (current.type === 'FunctionDeclaration' && current.id) handlers.set(current.id.name, current); });
       visit(node, current => {
         if (['IfStatement', 'SwitchStatement', 'ConditionalExpression'].includes(current.type)) diagnostic('DYNAMIC_UI', '条件分支需要运行采集确认；静态展示不代表同时可见。', module.file, current);
         if (current.type === 'JSXExpressionContainer' && !literal(current) && !['BooleanLiteral', 'NullLiteral'].includes(current.expression?.type)) {
@@ -175,7 +182,7 @@ export async function parseReactProject(directory, { id, name } = {}) {
           if (handler?.type === 'Identifier') handler = handlers.get(handler.name);
           if (handler) {
             const destinations = []; let conditional = false;
-            visit(handler, n => { if (['IfStatement', 'ConditionalExpression', 'LogicalExpression', 'SwitchStatement'].includes(n.type)) conditional = true; if (n.type === 'CallExpression' && n.callee?.name === 'navigate' && literal(n.arguments[0])) destinations.push(literal(n.arguments[0])); });
+            visit(handler, n => { if (['IfStatement', 'ConditionalExpression', 'LogicalExpression', 'SwitchStatement'].includes(n.type)) conditional = true; if (n.type === 'CallExpression' && navigateBindings.has(n.callee?.name) && literal(n.arguments[0])) destinations.push(literal(n.arguments[0])); });
             if (!conditional && destinations.length === 1) target = destinations[0];
           }
           navigation.push({ page, element, target, module, node: current }); return false;
