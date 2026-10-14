@@ -8,7 +8,10 @@ export const frameKey = (pageId, stateId) => `${pageId}/${stateId}`;
 export function renderFigma(input) {
   const model = validatePrototype(input), revision = digest(model), nodes = [], reactions = [];
   const font = { family: model.theme.fontFamily, style: 'Regular' };
-  const add = (key, type, parentKey, x, y, width, height, props = {}, name = key) => nodes.push({ key, type, name: name.slice(0, 512), parentKey, x, y, width, height, props });
+  const add = (key, type, parentKey, x, y, width, height, props = {}, name = key) => {
+    if (nodes.length >= 25000) throw new Error('Figma node budget exceeded; split the prototype');
+    const node = { key, type, name: name.slice(0, 512), parentKey, x, y, width, height, props }; nodes.push(node); return node;
+  };
   const text = (key, parent, value, x, y, width, size = 16, color = '#17213a') => {
     // Conservative Unicode-aware wrapping estimate; native text remains editable.
     const units = [...value].reduce((sum, c) => sum + (c.charCodeAt(0) > 255 ? 1 : 0.6), 0);
@@ -22,15 +25,15 @@ export function renderFigma(input) {
     add(root, 'FRAME', null, (frameIndex % 3) * 2800, Math.floor(frameIndex / 3) * 2800, width, height, { fills: fill('#f5f7fb'), clipsContent: true, overflowDirection: 'VERTICAL' }, `${page.title} · ${state.label}`);
     frameIndex++;
     let y = 28;
-    y += text(`${root}/title`, root, page.title, 24, y, inner, 26) + 14;
-    y += text(`${root}/state-label`, root, `状态：${state.label} · 可编辑原型`, 24, y, inner, 13, '#586780') + 24;
-    if (state.kind !== 'default') y += text(`${root}/state-message`, root, state.message ?? state.label, 24, y, inner, 18, state.kind === 'error' ? '#b42318' : '#315bea') + 20;
+    y += text(`${root}/header/title`, root, page.title, 24, y, inner, 26) + 14;
+    y += text(`${root}/header/state-label`, root, `状态：${state.label} · 可编辑原型`, 24, y, inner, 13, '#586780') + 24;
+    if (state.kind !== 'default') y += text(`${root}/header/state-message`, root, state.message ?? state.label, 24, y, inner, 18, state.kind === 'error' ? '#b42318' : '#315bea') + 20;
     for (const element of page.elements) {
-      const key = `${root}/${element.id}`;
+      const key = `${root}/element-${element.id}`;
       if (element.kind === 'button') {
         const bound = model.actions.some(a => a.pageId === page.id && a.fromState === state.id && a.elementId === element.id);
-        add(key, 'FRAME', root, 24, y, Math.min(inner, 420), 52, { fills: fill(bound ? model.theme.primary : '#7b8496'), cornerRadius: 10 }, element.label);
-        text(`${key}/label`, key, element.label, 16, 12, Math.min(inner, 420) - 32, 16, '#ffffff'); y += 66;
+        const button = add(key, 'FRAME', root, 24, y, Math.min(inner, 420), 52, { fills: fill(bound ? model.theme.primary : '#7b8496'), cornerRadius: 10 }, element.label);
+        button.height = Math.max(52, text(`${key}/label`, key, element.label, 16, 12, Math.min(inner, 420) - 32, 16, '#ffffff') + 24); y += button.height + 14;
       } else if (element.kind === 'field') {
         y += text(`${key}/label`, root, `${element.label}${element.required ? ' *' : ''}`, 24, y, inner, 14) + 8;
         const h = element.fieldType === 'textarea' ? 100 : 48;
@@ -43,7 +46,7 @@ export function renderFigma(input) {
       } else y += text(key, root, element.label, 24, y, inner, element.kind === 'heading' ? 22 : 16) + 20;
     }
   }
-  for (const a of model.actions) reactions.push({ sourceKey: a.trigger === 'timeout' ? frameKey(a.pageId, a.fromState) : `${frameKey(a.pageId, a.fromState)}/${a.elementId}`, destinationKey: frameKey(a.targetPageId, a.targetState), trigger: a.trigger === 'timeout' ? { type: 'AFTER_TIMEOUT', delaySeconds: a.delaySeconds } : { type: 'ON_CLICK' } });
+  for (const a of model.actions) reactions.push({ sourceKey: a.trigger === 'timeout' ? frameKey(a.pageId, a.fromState) : `${frameKey(a.pageId, a.fromState)}/element-${a.elementId}`, destinationKey: frameKey(a.targetPageId, a.targetState), trigger: a.trigger === 'timeout' ? { type: 'AFTER_TIMEOUT', delaySeconds: a.delaySeconds } : { type: 'ON_CLICK' } });
   const spec = validateDesignSpec({ schemaVersion: '1.0', id: `${model.id}-${revision.slice(0, 12)}`, name: model.name, source: { revision, adapter: 'prototype-1.0' }, fontPolicy: { allowFallback: true, fallback: { family: 'Inter', style: 'Regular' } }, nodes, assets: [], textStyles: [], variables: [], reactions, flows: model.flows.map(f => ({ nodeKey: frameKey(f.startPageId, f.startState), name: f.name })) });
   if (Buffer.byteLength(JSON.stringify(spec)) > 6.5 * 1024 * 1024) throw new Error('Figma spec exceeds bridge payload budget; split the prototype into smaller flows');
   return spec;

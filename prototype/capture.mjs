@@ -13,7 +13,7 @@ export async function captureURL({ url, pageId, stateId = 'default', width = 128
   if (!['http:', 'https:'].includes(target.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(target.hostname) || target.username || target.password || target.search || target.hash) throw new Error('Capture requires a loopback URL without credentials, query or fragment');
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$/.test(pageId ?? '') || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$/.test(stateId)) throw new Error('Invalid page or state ID');
   if (![width, height].every(n => Number.isInteger(n) && n >= 280 && n <= 2560)) throw new Error('Invalid capture viewport');
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, ...(process.env.PROTOTYPE_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PROTOTYPE_CHROMIUM_EXECUTABLE, args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=angle', '--use-angle=swiftshader'] } : {}) });
   try {
     const context = await browser.newContext({ viewport: { width, height }, serviceWorkers: 'block' });
     await context.route('**/*', route => new URL(route.request().url()).origin === target.origin && ['GET', 'HEAD'].includes(route.request().method()) ? route.continue() : route.abort());

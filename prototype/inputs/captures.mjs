@@ -25,7 +25,7 @@ export function applyRuntimeCaptures(model, original, input) {
       if (!page.elements.some(e => e.id === element) || !sourceMap.has(sourceId)) throw new Error(`Invalid elementMap ${root}/${element}`);
     }
     for (const reaction of spec.reactions) if (reaction.sourceKey.startsWith(`${root}/`)) {
-      const elementId = reaction.sourceKey.slice(root.length + 1), sourceId = snapshot.elementMap[elementId];
+      const elementId = reaction.sourceKey.slice(root.length + 1).replace(/^element-/, ''), sourceId = snapshot.elementMap[elementId];
       if (!sourceId || !sourceMap.has(sourceId)) throw new Error(`Capture needs elementMap for interactive control ${root}/${elementId}`);
       reaction.sourceKey = sourceMap.get(sourceId);
     }

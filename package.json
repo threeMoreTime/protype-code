@@ -13,7 +13,8 @@
     "test": "npm run test:prototype && npm run test:legacy",
     "setup": "npm ci && npm --prefix .research/local-figma-bridge-poc ci",
     "check:bundle": "node .research/local-figma-bridge-poc/scripts/build-plugin-code.mjs --check",
-    "capture": "node prototype/capture.mjs"
+    "capture": "node prototype/capture.mjs",
+    "test:browser": "node --test --test-concurrency=1 tests/prototype/browser/*.test.mjs"
   },
   "dependencies": {
     "@babel/parser": "7.28.5",
