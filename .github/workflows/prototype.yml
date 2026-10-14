@@ -1,0 +1,32 @@
+name: Prototype pipeline
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            .research/local-figma-bridge-poc/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm --prefix .research/local-figma-bridge-poc ci --ignore-scripts
+      - run: npm run check:bundle
+      - run: npm test
+      - run: npm run acceptance
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get install -y fonts-noto-cjk
+      - run: npm run test:browser
+      - run: npm audit --audit-level=high
+      - run: npm --prefix .research/local-figma-bridge-poc audit --audit-level=high
+      - run: git diff --exit-code

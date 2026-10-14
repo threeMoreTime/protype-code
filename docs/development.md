@@ -30,3 +30,8 @@ npm run doctor
 本次文档依据 docs-sync 完成变更映射，并用 docs-editor 做命令、路径和术语核对。删除、归档或合并历史文档属于另一个治理动作，需单独判断其保留价值。
 
 配对凭据、授权记录、用户截图及完整场景放在忽略目录。交付包只包含 manifest 显式列入的证据；发布或分享前仍需检查其内容。
+
+
+## 通用产品层
+
+根目录 `npm run setup` 安装产品与桥接依赖。`npm test` 运行产品、历史交接及桥接测试；`npm run acceptance` 执行三个行业样例并生成结构摘要。`npm run test:browser` 单独验收真实浏览器交互（先安装 Chromium）。新增渲染器的三个样例也经过 Figma API 替身 apply/audit；真实 Figma 仍需独立验收。详见 [当前验收](prototype/acceptance.md)。
