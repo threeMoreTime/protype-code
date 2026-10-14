@@ -1,3 +1,6 @@
 # Local third-party tools and bridge credentials must never be committed.
 /.tools/
 /.local/
+/node_modules/
+/prototype-output/
+/test-results/

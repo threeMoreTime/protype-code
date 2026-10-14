@@ -12,6 +12,7 @@ import { TaskAuthorizationStore } from "../relay/task-authorization-store.mjs";
 import { MutationAudit } from "../relay/mutation-audit.mjs";
 import { DESIGN_ACTIONS, designPayload } from "../design/commands.mjs";
 import { decodePng } from "../delivery/png.mjs";
+import { isBase64 } from "../design/base64.mjs";
 import { configuredDesignTimeout, designRequestTimeout } from "../design/request-timeout.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -50,7 +51,7 @@ export function decodePngBase64(base64) {
   if (typeof base64 !== "string" || base64.length === 0 || base64.length > Math.ceil(MAX_EXPORT_BYTES * 4 / 3) + 8) {
     throw new Error("PNG payload is missing or exceeds the POC export limit");
   }
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(base64)) {
+  if (!isBase64(base64)) {
     throw new Error("PNG payload is not valid base64");
   }
   const bytes = Buffer.from(base64, "base64");

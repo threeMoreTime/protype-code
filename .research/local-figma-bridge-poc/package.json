@@ -18,9 +18,9 @@
     "start": "node mcp/server.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@noble/hashes": "2.4.0",
-    "ws": "8.18.0",
+    "ws": "8.22.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
