@@ -105,3 +105,26 @@ test('static required booleans survive React extraction and dynamic rules requir
     assert.equal(coverageReport(dynamic).status, 'NEEDS_REVIEW');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('literal JSX body expressions retain text and evidence without duplicating nested containers', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'react-literal-text-'));
+  try {
+    const file = path.join(dir, 'App.tsx');
+    const source = `import { Route, Routes } from 'react-router-dom';
+      function Notice() { return <main><h1>告知</h1><p>{'必须先确认服务条款'}</p><p>请{'确认'}再继续</p><article>{'文章正文'}<section>{'小节正文'}<div>{'容器正文'}<span>{'行内正文'}</span></div></section></article><p>{''}{false}{null}</p></main>; }
+      export default function App() { return <Routes><Route path="/" element={<Notice/>}/></Routes>; }`;
+    await writeFile(file, source);
+    const model = await parseReactProject(dir), spec = renderFigma(model);
+    const labels = ['必须先确认服务条款', '请确认再继续', '文章正文', '小节正文', '容器正文', '行内正文'];
+    assert.deepEqual(model.pages[0].elements.filter(e => e.kind === 'text').map(e => e.label), labels);
+    for (const label of labels) {
+      assert.equal(spec.nodes.filter(n => n.props.characters === label).length, 1);
+      assert.ok(model.requirements.some(r => r.text === `代码界面：${label}` && r.evidence[0].file === 'App.tsx'));
+    }
+    assert.equal(coverageReport(model).status, 'READY_FOR_REVIEW');
+    await writeFile(file, source.replace("{'必须先确认服务条款'}", '{account.notice}'));
+    const dynamic = await parseReactProject(dir);
+    assert.ok(dynamic.diagnostics.some(d => d.code === 'DYNAMIC_UI'));
+    assert.equal(coverageReport(dynamic).status, 'NEEDS_REVIEW');
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

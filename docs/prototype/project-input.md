@@ -8,6 +8,8 @@ npm run prototype -- --project examples/prototypes/content --id content-demo --o
 
 字段必填支持裸写 `required` 和布尔字面量 `required={true}` / `required={false}`。其他表达式不会被执行或猜成确定的非必填规则，会记录 `DYNAMIC_REQUIRED` 并要求人工确认。
 
+正文同时提取普通 JSX 文字和字符串字面量表达式，例如 `<p>{'服务条款'}</p>`；混合文字按原顺序拼接，嵌套容器各自提取且不重复。变量、函数调用等动态正文仍进入 `DYNAMIC_UI`，不会执行目标代码。
+
 不能确认的动态路由、条件视图、远程数据、组件 props、第三方组件、提交回调和权限进入 diagnostics。提取出的字段/内容需求来自代码证据，不是原 PRD 的完整性证明。入口、嵌套路由布局和动态状态需要人工核对。项目名称、选择器和领域不会影响解析逻辑。
 
 先由用户正常启动可信应用，再运行隔离 Chromium 采集：
