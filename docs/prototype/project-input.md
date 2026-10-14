@@ -27,3 +27,5 @@ npm run prototype -- --project path/to/project --captures prototype-output/captu
 以上 capture 对象只是结构说明，真实内容由 capture 命令产生。目标元素可使用 `data-prototype-id="semantic-button-id"` 自动建立 elementMap，也可根据采集树手工填写。绑定交互的控件缺少映射时拒绝拼接，避免按文案猜错按钮。每个页面状态最多附加一个捕获；可合并多个 snapshots。
 
 Figma 使用捕获几何和可编辑图层替代该状态的模板画面，其余状态沿用语义模板。HTML 仍采用语义模板，不声称逐像素复刻项目。索引随交付保存；最终 spec 内容版本包含采集数据。密码/隐藏字段、data-capture-private 和用户输入值默认排除，SVG 后代同样脱敏。
+
+普通下拉框保留公开的选中项标签，用于还原控件画面；选项或所属 optgroup 标有 `data-capture-private` 时，标签留空且 `valueCaptured` 为 false。显式开启输入值采集也不能越过隐私标记，采集过程不会修改源页面。
