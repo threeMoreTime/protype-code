@@ -8,6 +8,7 @@
   },
   "scripts": {
     "prototype": "node prototype/cli.mjs",
+    "prototype:business": "node prototype/cli.mjs --business-suite",
     "test:prototype": "node --test tests/prototype/*.test.mjs",
     "test:legacy": "node --test scripts/c2c-handoff.test.mjs && npm --prefix .research/local-figma-bridge-poc test",
     "test": "npm run test:prototype && npm run test:legacy",

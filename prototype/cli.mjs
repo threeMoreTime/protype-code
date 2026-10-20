@@ -8,10 +8,19 @@ import { loadDocument } from './inputs/documents.mjs';
 import { mergePrototype } from './core/merge.mjs';
 import { validatePrototype } from './core/model.mjs';
 import { buildArtifacts, writeArtifacts } from './pipeline.mjs';
+import { buildBusinessArtifacts } from './business/build.mjs';
 
 export async function main(args = process.argv.slice(2)) {
-  const { values } = parseArgs({ args, strict: true, options: { input: { type: 'string' }, project: { type: 'string' }, captures: { type: 'string' }, out: { type: 'string' }, id: { type: 'string' }, name: { type: 'string' }, base: { type: 'string' }, edited: { type: 'string' }, resolutions: { type: 'string' }, help: { type: 'boolean' } } });
-  if (values.help) { console.log('Usage: npm run prototype -- --input requirements.md --out prototype-output/new [--id project-id]\nOr --project path/to/react-project [--captures snapshots.json]. Inputs: .md, .txt, .html, .docx, PrototypeSpec .json. Incremental: --base previous/generated.json --edited edited-prototype.json [--resolutions choices.json]. Existing output directories are never overwritten.'); return; }
+  const { values } = parseArgs({ args, strict: true, options: { input: { type: 'string' }, project: { type: 'string' }, captures: { type: 'string' }, out: { type: 'string' }, id: { type: 'string' }, name: { type: 'string' }, base: { type: 'string' }, edited: { type: 'string' }, resolutions: { type: 'string' }, 'business-suite': { type: 'boolean' }, app: { type: 'string' }, locale: { type: 'string' }, device: { type: 'string' }, 'all-design-locales': { type: 'boolean' }, help: { type: 'boolean' } } });
+  if (values.help) { console.log('Usage: npm run prototype -- --input requirements.md --out prototype-output/new [--id project-id]\nOr --project path/to/react-project [--captures snapshots.json]. Inputs: .md, .txt, .html, .docx, PrototypeSpec .json. Incremental: --base previous/generated.json --edited edited-prototype.json [--resolutions choices.json]. Business suite: npm run prototype:business -- --out prototype-output/business [--app workflow|cs-admin|cs-h5] [--device desktop|mobile] [--locale zh_cn] [--all-design-locales]. HTML includes all apps and languages; design selection controls native design files. Business output contains no Markdown or ZIP. Existing output directories are never overwritten.'); return; }
+  if (values['business-suite']) {
+    if (!values.out || ['input', 'project', 'captures', 'base', 'edited', 'resolutions', 'id', 'name'].some(key => values[key])) throw new Error('--business-suite requires --out and cannot combine with generic inputs or merge options');
+    const artifacts = buildBusinessArtifacts({ app: values.app, locale: values.locale, device: values.device, allDesignLocales: values['all-design-locales'] });
+    const output = await writeArtifacts(artifacts, values.out);
+    console.log(JSON.stringify({ output, ...artifacts.counts, status: artifacts.status }, null, 2));
+    return artifacts;
+  }
+  if (values.app || values.locale || values.device || values['all-design-locales']) throw new Error('Business selection options require --business-suite');
   if ((!values.input === !values.project) || !values.out) throw new Error('Choose exactly one of --input or --project, and supply --out');
   let model;
   if (values.project) model = await parseReactProject(values.project, { id: values.id, name: values.name });
