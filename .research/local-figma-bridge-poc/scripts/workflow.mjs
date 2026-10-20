@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { z } from 'zod';
 import { validateDesignSpec } from '../design/spec.mjs';
 import { designPayload } from '../design/commands.mjs';
 import { createAuditAssembler } from '../design/audit.mjs';
@@ -58,6 +59,19 @@ export function validateSessionRequest(request) {
     throw new Error('SESSION_NATIVE_FLOW_ADOPTION_REQUIRES_RECONCILE');
   }
 }
+const readEvidenceSchema = z.object({
+  fields: z.array(z.enum(['geometry', 'vectorPaths', 'text', 'paints', 'mask', 'layout', 'component', 'children']))
+    .min(1).max(8).refine(fields => new Set(fields).size === fields.length),
+  readScope: z.object({ fileIdentity: z.string().min(1).max(512), pageId: z.string().regex(/^[0-9]+:[0-9]+$/),
+    rootNodeId: z.string().regex(/^[0-9]+:[0-9]+$/) }).strict(),
+  childOffset: z.number().int().min(0).max(25000).optional(), childLimit: z.number().int().min(1).max(1000).optional(),
+  segmentOffset: z.number().int().min(0).max(25000).optional(), segmentLimit: z.number().int().min(1).max(1000).optional(),
+}).strict();
+export function readNodeSessionArgs(request) {
+  if (typeof request.targetNodeId !== 'string' || request.targetNodeId.length > 200 || !/^(?:I)?\d+:\d+(?:;\d+:\d+)*$/.test(request.targetNodeId)) throw new Error('SESSION_NODE_ID_INVALID');
+  for (const key of Object.keys(request)) if (!['command', 'targetNodeId', 'evidence'].includes(key)) throw new Error('SESSION_READ_NODE_FIELDS_INVALID');
+  return { targetNodeId: request.targetNodeId, ...(Object.hasOwn(request, 'evidence') ? { evidence: readEvidenceSchema.parse(request.evidence) } : {}) };
+}
 export function designSessionArgs(config, request, spec, grant, operationId = `op-${randomUUID()}`) {
   validateSessionRequest(request);
   const command = request.command;
@@ -108,8 +122,7 @@ export async function session(configFile) {
         if (command === 'quit') break;
         if (command === 'restart') { await client.close(); await start(); output({ event: 'restarted', note: 'Wait for plugin reconnect, then status.' }); continue; }
         if (command === 'read-node') {
-          if (typeof request.targetNodeId !== 'string' || request.targetNodeId.length > 200 || !/^(?:I)?\d+:\d+(?:;\d+:\d+)*$/.test(request.targetNodeId)) throw new Error('SESSION_NODE_ID_INVALID');
-          const node = (await call('figma_scope_read_node', { targetNodeId: request.targetNodeId })).value;
+          const node = (await call('figma_scope_read_node', readNodeSessionArgs(request))).value;
           const evidencePath = path.join(config.outDir, `${config.runId ?? 'session'}.read-node.${encodeURIComponent(request.targetNodeId)}.${Date.now()}.json`);
           await save(evidencePath, { collectedAt: new Date().toISOString(), expectedFileIdentity: config.fileIdentity, node });
           output({ ...node, evidencePath }); continue;

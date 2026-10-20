@@ -163,7 +163,14 @@ export async function createMcpServer({ port = configuredPort(), stderr = proces
   }
   registerTool(server, bridge, "figma_read_document", "Read document metadata, pages, current page, and selection summary without using REST or screenshots.", "read_document", { annotations: { readOnlyHint: true } });
   server.registerTool("figma_scope_read_node", { description: "Read one node by ID for scope validation and read-back.",
-    inputSchema: { targetNodeId: z.string() }, annotations: { readOnlyHint: true } }, async (args) => {
+    inputSchema: z.object({ targetNodeId: z.string(), evidence: z.object({
+      fields: z.array(z.enum(["geometry", "vectorPaths", "text", "paints", "mask", "layout", "component", "children"]))
+        .min(1).max(8).refine(fields => new Set(fields).size === fields.length, "Evidence fields must be unique"),
+      readScope: z.object({ fileIdentity: z.string().min(1).max(512),
+        pageId: z.string().regex(/^[0-9]+:[0-9]+$/), rootNodeId: z.string().regex(/^[0-9]+:[0-9]+$/) }).strict(),
+      childOffset: z.number().int().min(0).max(25000).optional(), childLimit: z.number().int().min(1).max(1000).optional(),
+      segmentOffset: z.number().int().min(0).max(25000).optional(), segmentLimit: z.number().int().min(1).max(1000).optional(),
+    }).strict().optional() }).strict(), annotations: { readOnlyHint: true } }, async (args) => {
     try { return jsonToolResult(await bridge.callPlugin("scope_read_node", args)); }
     catch (error) { return errorToolResult(error); }
   });

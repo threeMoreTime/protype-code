@@ -892,6 +892,388 @@ async function executeScopedMutation(message) {
   return { id, exists: (await figma.getNodeByIdAsync(id)) !== null, auditBefore };
 }
 
+const EVIDENCE_FIELDS = ["geometry", "vectorPaths", "text", "paints", "mask", "layout", "component", "children"];
+const EVIDENCE_FIELD_BYTES = 512 * 1024;
+const EVIDENCE_RESPONSE_BYTES = 7 * 1024 * 1024;
+const EVIDENCE_ERROR_CODES = new WeakMap();
+const EVIDENCE_TEXT_STYLES = ["fontName", "fontSize", "fontWeight", "textDecoration", "lineHeight", "letterSpacing", "fills", "textStyleId", "fillStyleId"];
+const evidenceNodeId = value => typeof value === "string" && /^(?:I)?[0-9]+:[0-9]+(?:;[0-9]+:[0-9]+)*$/.test(value);
+
+function evidenceFailure(code) {
+  const error = new Error(code); EVIDENCE_ERROR_CODES.set(error, code); throw error;
+}
+function evidenceObject(value, keys) {
+  return value && typeof value === "object" && !Array.isArray(value) &&
+    Object.keys(value).every(key => keys.includes(key));
+}
+function validateEvidenceRequest(payload) {
+  const request = payload?.evidence;
+  if (!evidenceObject(payload, ["targetNodeId", "evidence"]) || !evidenceNodeId(payload.targetNodeId) ||
+      !evidenceObject(request, ["fields", "readScope", "childOffset", "childLimit", "segmentOffset", "segmentLimit"]) ||
+      !Array.isArray(request.fields) || request.fields.length < 1 || request.fields.length > EVIDENCE_FIELDS.length ||
+      request.fields.some(field => !EVIDENCE_FIELDS.includes(field)) || new Set(request.fields).size !== request.fields.length ||
+      !evidenceObject(request.readScope, ["fileIdentity", "pageId", "rootNodeId"]) ||
+      typeof request.readScope.fileIdentity !== "string" || request.readScope.fileIdentity.length > 512 ||
+      !/^[0-9]+:[0-9]+$/.test(request.readScope.pageId || "") || !/^[0-9]+:[0-9]+$/.test(request.readScope.rootNodeId || "")) {
+    evidenceFailure("EVIDENCE_REQUEST_INVALID");
+  }
+  for (const [key, minimum, maximum] of [["childOffset", 0, 25000], ["childLimit", 1, 1000],
+    ["segmentOffset", 0, 25000], ["segmentLimit", 1, 1000]]) {
+    if (request[key] !== undefined && (!Number.isInteger(request[key]) || request[key] < minimum || request[key] > maximum)) {
+      evidenceFailure("EVIDENCE_REQUEST_INVALID");
+    }
+  }
+  return request;
+}
+
+function evidenceCharge(budget, units) {
+  // UTF-16 string length and JSON punctuation are cheap lower bounds. Share
+  // this counter across each native field so many small values cannot evade it.
+  budget.units += units;
+  if (budget.units > EVIDENCE_FIELD_BYTES) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+}
+
+function evidenceHash(value) {
+  const text = JSON.stringify(value);
+  if (text.length > EVIDENCE_FIELD_BYTES || BridgeDesignRuntime.utf8ToBytes(text).byteLength > EVIDENCE_FIELD_BYTES) {
+    evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+  }
+  return BridgeDesignRuntime.designSignature(value);
+}
+
+function evidenceCopy(value, depth = 0, seen = new Set(), budget = { units: 0 }) {
+  if (typeof value === "symbol" && value === figma.mixed) evidenceFailure("NOT_VERIFIED_MIXED");
+  evidenceCharge(budget, typeof value === "string" ? value.length + 2 : 2);
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (!value || typeof value !== "object") evidenceFailure("NOT_VERIFIED_INVALID");
+  if (depth > 16 || seen.has(value)) evidenceFailure("NOT_VERIFIED_INVALID");
+  if (Array.isArray(value) && value.length > 25000) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+  const keys = Object.keys(value);
+  if (keys.length > 25000) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+  seen.add(value);
+  const output = Array.isArray(value) ? [] : {};
+  for (const key of keys) {
+    if (["__proto__", "constructor", "prototype"].includes(key)) evidenceFailure("NOT_VERIFIED_INVALID");
+    evidenceCharge(budget, Array.isArray(value) ? 1 : key.length + 3);
+    output[key] = evidenceCopy(value[key], depth + 1, seen, budget);
+  }
+  seen.delete(value);
+  return output;
+}
+
+function evidenceProperties(node, properties, budget) {
+  const value = {}, propertyStatus = {};
+  for (const property of properties) {
+    try {
+      const native = node[property];
+      if (native === undefined) propertyStatus[property] = "NOT_VERIFIED_UNSUPPORTED";
+      else {
+        evidenceCharge(budget, property.length + 3);
+        value[property] = evidenceCopy(native, 0, new Set(), budget); propertyStatus[property] = "VERIFIED";
+      }
+    } catch (error) {
+      if (EVIDENCE_ERROR_CODES.get(error) === "NOT_VERIFIED_BUDGET_EXCEEDED") throw error;
+      propertyStatus[property] = EVIDENCE_ERROR_CODES.get(error) || "NOT_VERIFIED_READ_ERROR";
+    }
+  }
+  return { value, propertyStatus };
+}
+
+function evidencePaints(paints, budget) {
+  if (typeof paints === "symbol" && paints === figma.mixed) evidenceFailure("NOT_VERIFIED_MIXED");
+  if (!Array.isArray(paints)) evidenceFailure("NOT_VERIFIED_UNSUPPORTED");
+  if (paints.length > 4000) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+  return paints.map(paint => {
+    evidenceCharge(budget, 16);
+    if (!["SOLID", "IMAGE", "GRADIENT_LINEAR", "GRADIENT_RADIAL", "GRADIENT_ANGULAR", "GRADIENT_DIAMOND"].includes(paint?.type)) {
+      evidenceFailure("NOT_VERIFIED_UNSUPPORTED_PAINT");
+    }
+    const matrix = value => Array.isArray(value) && value.length === 2 &&
+      value.every(row => Array.isArray(row) && row.length === 3 && row.every(Number.isFinite));
+    const color = (value, alpha) => value && (alpha ? ["r", "g", "b", "a"] : ["r", "g", "b"])
+      .every(key => Number.isFinite(value[key]) && value[key] >= 0 && value[key] <= 1);
+    if (paint.type === "SOLID" && !color(paint.color, false)) evidenceFailure("NOT_VERIFIED_INVALID");
+    if (paint.type === "IMAGE") {
+      if (!["FILL", "FIT", "CROP", "TILE"].includes(paint.scaleMode)) evidenceFailure("NOT_VERIFIED_UNSUPPORTED_PAINT");
+      if (typeof paint.imageHash !== "string" || !paint.imageHash.length) evidenceFailure("NOT_VERIFIED_MISSING_IMAGE");
+      if (paint.imageTransform !== undefined && !matrix(paint.imageTransform)) evidenceFailure("NOT_VERIFIED_INVALID");
+    }
+    if (paint.type.startsWith("GRADIENT_")) {
+      if (!matrix(paint.gradientTransform) || !Array.isArray(paint.gradientStops) || paint.gradientStops.length < 2 ||
+          paint.gradientStops.some((stop, index, stops) => !Number.isFinite(stop?.position) || stop.position < 0 || stop.position > 1 ||
+            index > 0 && stop.position < stops[index - 1].position || !color(stop.color, true))) evidenceFailure("NOT_VERIFIED_INVALID");
+    }
+    const value = { type: paint.type };
+    for (const key of ["opacity", "visible", "blendMode", "boundVariables", ...(paint.type === "SOLID" ? ["color"] :
+      paint.type === "IMAGE" ? ["imageHash", "scaleMode", "imageTransform", "scalingFactor", "rotation", "filters"] :
+        ["gradientStops", "gradientTransform"])]) {
+      if (paint[key] !== undefined) {
+        evidenceCharge(budget, key.length + 3);
+        value[key] = evidenceCopy(paint[key], 0, new Set(), budget);
+      }
+    }
+    return value;
+  });
+}
+
+function evidenceAppearance(node, strokes, budget) {
+  const rounded = ["FRAME", "COMPONENT", "INSTANCE", "RECTANGLE"].includes(node.type);
+  const properties = ["effects", ...(rounded ? ["cornerRadius"] : []), ...(strokes.length ? ["strokeWeight", "strokeAlign"] : [])];
+  const result = evidenceProperties(node, properties, budget);
+  if (!rounded) result.propertyStatus.cornerRadius = "NOT_APPLICABLE";
+  if (!strokes.length) {
+    result.propertyStatus.strokeWeight = "NOT_APPLICABLE";
+    result.propertyStatus.strokeAlign = "NOT_APPLICABLE";
+  }
+  for (const [key, valid] of [["effects", value => Array.isArray(value)],
+    ["cornerRadius", value => Number.isFinite(value) && value >= 0],
+    ["strokeWeight", value => Number.isFinite(value) && value >= 0],
+    ["strokeAlign", value => ["CENTER", "INSIDE", "OUTSIDE"].includes(value)]]) {
+    if (result.propertyStatus[key] === "VERIFIED" && !valid(result.value[key])) {
+      delete result.value[key]; result.propertyStatus[key] = "NOT_VERIFIED_INVALID";
+    }
+  }
+  return { ...result, complete: Object.values(result.propertyStatus).every(status => ["VERIFIED", "NOT_APPLICABLE"].includes(status)) };
+}
+
+function evidenceFixedPosition(node, scope, budget) {
+  const parent = node.parent;
+  const derivation = { parentId: typeof parent?.id === "string" ? parent.id : null,
+    parentType: typeof parent?.type === "string" ? parent.type : null,
+    childIndex: null, childCount: null, numberOfFixedChildren: null };
+  evidenceCharge(budget, (derivation.parentId?.length ?? 0) + (derivation.parentType?.length ?? 0) + 100);
+  const unavailable = (status, reason) => ({ status, derivation: { ...derivation, reason } });
+  if (!parent || !derivation.parentId || !derivation.parentType) return unavailable("NOT_VERIFIED_UNSUPPORTED", "HOST_API_UNAVAILABLE");
+  if (["PAGE", "SECTION", "GROUP", "COMPONENT_SET", "DOCUMENT"].includes(derivation.parentType)) {
+    return { status: "VERIFIED", value: false, derivation: { ...derivation, reason: "PARENT_HAS_NO_FIXED_CHILDREN" } };
+  }
+  if (!["FRAME", "COMPONENT", "INSTANCE"].includes(derivation.parentType)) {
+    return unavailable("NOT_VERIFIED_UNSUPPORTED_PARENT", "UNSUPPORTED_PARENT_TYPE");
+  }
+  try { assertInScope(parent, scope); }
+  catch { return unavailable("NOT_VERIFIED_PARENT_SCOPE_REQUIRED", "PARENT_SCOPE_REQUIRED"); }
+  try {
+    const count = parent.numberOfFixedChildren;
+    if (count === undefined) return unavailable("NOT_VERIFIED_UNSUPPORTED", "HOST_API_UNAVAILABLE");
+    if (!Number.isInteger(count) || count < 0 || count > 25000) return unavailable("NOT_VERIFIED_INVALID", "INVALID_FIXED_CHILDREN");
+    const children = parent.children;
+    if (children === undefined) return unavailable("NOT_VERIFIED_UNSUPPORTED", "HOST_API_UNAVAILABLE");
+    if (!Array.isArray(children)) return unavailable("NOT_VERIFIED_INVALID", "INVALID_FIXED_CHILDREN");
+    if (children.length > 25000) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+    let childIndex = -1;
+    for (let index = 0; index < children.length; index += 1) {
+      evidenceCharge(budget, 2);
+      if (children[index]?.id === node.id) {
+        if (childIndex !== -1) return unavailable("NOT_VERIFIED_INVALID", "INVALID_FIXED_CHILDREN");
+        childIndex = index;
+      }
+    }
+    if (childIndex === -1 || count > children.length) return unavailable("NOT_VERIFIED_INVALID", "INVALID_FIXED_CHILDREN");
+    return { status: "VERIFIED", value: childIndex >= children.length - count,
+      derivation: { ...derivation, childIndex, childCount: children.length, numberOfFixedChildren: count } };
+  } catch (error) {
+    if (EVIDENCE_ERROR_CODES.get(error) === "NOT_VERIFIED_BUDGET_EXCEEDED") throw error;
+    return unavailable("NOT_VERIFIED_READ_ERROR", "HOST_API_UNAVAILABLE");
+  }
+}
+
+function evidencePage(value) {
+  const seen = new Set();
+  while (value && value.type !== "PAGE" && !seen.has(value)) { seen.add(value); value = value.parent; }
+  return value?.type === "PAGE" ? value : null;
+}
+
+function evidencePageSlice(items, offset, limit) {
+  if (!Array.isArray(items) || items.length > 25000 || offset > items.length) evidenceFailure("NOT_VERIFIED_INVALID");
+  const end = Math.min(items.length, offset + limit);
+  return { items: items.slice(offset, end), complete: offset === 0 && end === items.length,
+    pagination: { offset, limit, total: items.length, nextOffset: end < items.length ? end : null } };
+}
+
+function evidenceText(node, request, budget) {
+  if (node.type !== "TEXT" || typeof node.getStyledTextSegments !== "function") evidenceFailure("NOT_VERIFIED_UNSUPPORTED");
+  const characters = node.characters;
+  if (typeof characters !== "string") evidenceFailure("NOT_VERIFIED_INVALID");
+  evidenceCharge(budget, characters.length + 2);
+  if (BridgeDesignRuntime.utf8ToBytes(characters).byteLength > EVIDENCE_FIELD_BYTES) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+  const native = node.getStyledTextSegments(EVIDENCE_TEXT_STYLES);
+  if (!Array.isArray(native) || native.length > 25000) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+  let end = 0;
+  const boundary = index => index === 0 || index === characters.length ||
+    !(characters.charCodeAt(index - 1) >= 0xd800 && characters.charCodeAt(index - 1) <= 0xdbff &&
+      characters.charCodeAt(index) >= 0xdc00 && characters.charCodeAt(index) <= 0xdfff);
+  for (const segment of native) {
+    if (!Number.isInteger(segment.start) || !Number.isInteger(segment.end) || segment.start !== end || segment.end <= end ||
+        segment.end > characters.length || !boundary(segment.start) || !boundary(segment.end) ||
+        segment.characters !== characters.slice(segment.start, segment.end)) evidenceFailure("NOT_VERIFIED_INVALID");
+    end = segment.end;
+  }
+  if (end !== characters.length) evidenceFailure("NOT_VERIFIED_INVALID");
+  const allSegments = native.map(segment => {
+    evidenceCharge(budget, segment.characters.length + 20);
+    const value = { start: segment.start, end: segment.end, characters: segment.characters, styleFieldStatus: {} };
+    for (const key of EVIDENCE_TEXT_STYLES) {
+      if (segment[key] === undefined) value.styleFieldStatus[key] = "NOT_VERIFIED_UNSUPPORTED";
+      else {
+        evidenceCharge(budget, key.length + 3);
+        value[key] = key === "fills" ? evidencePaints(segment[key], budget) : evidenceCopy(segment[key], 0, new Set(), budget);
+        value.styleFieldStatus[key] = "VERIFIED";
+      }
+    }
+    return value;
+  });
+  const page = evidencePageSlice(allSegments, request.segmentOffset ?? 0, request.segmentLimit ?? 100);
+  const typography = evidenceProperties(node, ["fontName", "fontSize", "fontWeight", "textDecoration", "lineHeight", "letterSpacing",
+    "textAutoResize", "textAlignHorizontal", "textAlignVertical", "hasMissingFont"], budget);
+  const stylesComplete = allSegments.every(segment => Object.values(segment.styleFieldStatus).every(status => status === "VERIFIED"));
+  const typographyComplete = Object.entries(typography.propertyStatus).every(([key, status]) => status === "VERIFIED" ||
+    status === "NOT_VERIFIED_MIXED" && EVIDENCE_TEXT_STYLES.includes(key) && allSegments.length > 0 && stylesComplete);
+  return { value: { characters, segments: page.items, typography: typography.value, typographyFieldStatus: typography.propertyStatus },
+    complete: page.complete && stylesComplete && typographyComplete,
+    pagination: page.pagination, snapshotHash: evidenceHash({ characters, segments: allSegments,
+      typography: typography.value, typographyFieldStatus: typography.propertyStatus }) };
+}
+
+async function evidenceField(node, field, request, scope) {
+  const budget = { units: 0 };
+  if (field === "geometry") {
+    const result = evidenceProperties(node, ["name", "type", "x", "y", "width", "height", "rotation", "relativeTransform", "absoluteTransform", "opacity", "visible"], budget);
+    result.value.parentId = node.parent?.id ?? null;
+    return { ...result, complete: Object.values(result.propertyStatus).every(status => status === "VERIFIED") };
+  }
+  if (field === "vectorPaths") {
+    if (node.type !== "VECTOR") evidenceFailure("NOT_VERIFIED_UNSUPPORTED");
+    const paths = node.vectorPaths;
+    if (!Array.isArray(paths) || paths.length > 25000 || paths.some(path => !["NONZERO", "EVENODD"].includes(path?.windingRule) || typeof path.data !== "string")) {
+      evidenceFailure("NOT_VERIFIED_INVALID");
+    }
+    return { value: paths.map(path => {
+      evidenceCharge(budget, path.data.length + path.windingRule.length + 32);
+      return { windingRule: path.windingRule, data: path.data };
+    }), complete: true };
+  }
+  if (field === "text") return evidenceText(node, request, budget);
+  if (field === "paints") {
+    const fills = evidencePaints(node.fills, budget), strokes = evidencePaints(node.strokes, budget);
+    const appearance = evidenceAppearance(node, strokes, budget);
+    return { value: { fills, strokes, appearance: appearance.value, appearancePropertyStatus: appearance.propertyStatus }, complete: appearance.complete };
+  }
+  if (field === "mask") {
+    if (typeof node.isMask !== "boolean") evidenceFailure("NOT_VERIFIED_UNSUPPORTED");
+    if (!["ALPHA", "VECTOR", "LUMINANCE"].includes(node.maskType)) evidenceFailure("NOT_VERIFIED_UNSUPPORTED_MASK");
+    return { value: { isMask: node.isMask, maskType: node.maskType }, complete: true };
+  }
+  if (field === "layout") {
+    const result = evidenceProperties(node, ["layoutMode", "itemSpacing", "counterAxisSpacing", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+      "primaryAxisSizingMode", "counterAxisSizingMode", "primaryAxisAlignItems", "counterAxisAlignItems", "layoutWrap",
+      "layoutSizingHorizontal", "layoutSizingVertical", "layoutAlign", "layoutGrow", "layoutPositioning", "constraints", "clipsContent", "overflowDirection"], budget);
+    const fixed = evidenceFixedPosition(node, scope, budget);
+    result.propertyStatus.isFixed = fixed.status;
+    if (fixed.status === "VERIFIED") result.value.isFixed = fixed.value;
+    const enums = { layoutMode: ["NONE", "HORIZONTAL", "VERTICAL", "GRID"], layoutWrap: ["NO_WRAP", "WRAP"],
+      primaryAxisSizingMode: ["FIXED", "AUTO"], counterAxisSizingMode: ["FIXED", "AUTO"],
+      primaryAxisAlignItems: ["MIN", "CENTER", "MAX", "SPACE_BETWEEN"], counterAxisAlignItems: ["MIN", "CENTER", "MAX", "BASELINE"],
+      layoutSizingHorizontal: ["FIXED", "HUG", "FILL"], layoutSizingVertical: ["FIXED", "HUG", "FILL"],
+      layoutAlign: ["MIN", "CENTER", "MAX", "STRETCH", "INHERIT"], layoutPositioning: ["AUTO", "ABSOLUTE"],
+      overflowDirection: ["NONE", "HORIZONTAL", "VERTICAL", "BOTH"] };
+    for (const [key, values] of Object.entries(enums)) if (result.value[key] !== undefined && !values.includes(result.value[key])) {
+      evidenceFailure("NOT_VERIFIED_UNSUPPORTED_LAYOUT");
+    }
+    if (result.value.constraints !== undefined && (!evidenceObject(result.value.constraints, ["horizontal", "vertical"]) ||
+        !["MIN", "CENTER", "MAX", "STRETCH", "SCALE"].includes(result.value.constraints.horizontal) ||
+        !["MIN", "CENTER", "MAX", "STRETCH", "SCALE"].includes(result.value.constraints.vertical))) evidenceFailure("NOT_VERIFIED_UNSUPPORTED_LAYOUT");
+    return { ...result, derivations: { isFixed: fixed.derivation }, complete: Object.values(result.propertyStatus).every(status => status === "VERIFIED") };
+  }
+  if (field === "children") {
+    const children = "children" in node ? node.children : [];
+    if (!Array.isArray(children) || children.length > 25000) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+    const ids = children.map(child => {
+      const id = child.id;
+      if (!evidenceNodeId(id)) evidenceFailure("NOT_VERIFIED_INVALID");
+      evidenceCharge(budget, id.length + 3); return id;
+    });
+    if (ids.some(id => !evidenceNodeId(id))) evidenceFailure("NOT_VERIFIED_INVALID");
+    const page = evidencePageSlice(ids, request.childOffset ?? 0, request.childLimit ?? 100);
+    return { value: page.items, complete: page.complete, pagination: page.pagination, snapshotHash: evidenceHash(ids) };
+  }
+  if (field === "component") {
+    if (!["COMPONENT", "COMPONENT_SET", "INSTANCE"].includes(node.type)) evidenceFailure("NOT_VERIFIED_UNSUPPORTED");
+    const value = { type: node.type, componentSetId: node.parent?.type === "COMPONENT_SET" ? node.parent.id : null };
+    if (node.type === "INSTANCE") {
+      if (typeof node.getMainComponentAsync !== "function") evidenceFailure("NOT_VERIFIED_UNSUPPORTED");
+      const master = await node.getMainComponentAsync();
+      if (!master) evidenceFailure("NOT_VERIFIED_MISSING_MASTER");
+      value.mainComponentId = master?.id ?? null;
+      if (master) {
+        try { assertInScope(master, scope); }
+        catch {
+          const page = evidencePage(master);
+          return { status: "NOT_VERIFIED_MASTER_SCOPE_REQUIRED", complete: false, referenceNodeId: master.id,
+            ...(page ? { requiredReadScope: { fileIdentity: request.readScope.fileIdentity, pageId: page.id, rootNodeId: master.id } } : {}) };
+        }
+      }
+    }
+    for (const key of ["variantProperties", "componentProperties", "componentPropertyDefinitions", "overrides"]) {
+      if (node[key] !== undefined) value[key] = evidenceCopy(node[key], 0, new Set(), budget);
+    }
+    return { value, complete: true };
+  }
+  evidenceFailure("NOT_VERIFIED_UNSUPPORTED");
+}
+
+async function readNodeEvidence(payload) {
+  const request = validateEvidenceRequest(payload), identity = getFileIdentity().fileIdentity;
+  if (request.readScope.fileIdentity !== identity) evidenceFailure("SCOPE_FILE_MISMATCH");
+  const connection = { connectionId, sessionId, bridgeAuthenticated };
+  const checkConnection = () => {
+    if (getFileIdentity().fileIdentity !== identity) evidenceFailure("SCOPE_FILE_MISMATCH");
+    if (connection.connectionId !== connectionId || connection.sessionId !== sessionId || connection.bridgeAuthenticated !== bridgeAuthenticated) {
+      evidenceFailure("EVIDENCE_CONNECTION_CHANGED");
+    }
+  };
+  const page = figma.root.children.find(item => item.id === request.readScope.pageId);
+  if (!page || page.type !== "PAGE") evidenceFailure("SCOPE_PAGE_MISMATCH");
+  const result = { schemaVersion: "1.0", source: "PluginAPI", readVersion: "scope-evidence-1.0", fileIdentity: identity,
+    nodeId: payload.targetNodeId, pageId: page.id, readScope: { ...request.readScope }, fields: {}, complete: false, writes: 0 };
+  if (figma.currentPage.id !== page.id) {
+    result.scopeVerification = "NOT_VERIFIED_INACTIVE_PAGE";
+    for (const field of request.fields) result.fields[field] = { status: "NOT_VERIFIED_INACTIVE_PAGE", complete: false };
+  } else {
+    const scope = await resolveScope(request.readScope);
+    checkConnection(); assertInScope(scope.root, scope);
+    const node = scope.root.id === payload.targetNodeId ? scope.root : await figma.getNodeByIdAsync(payload.targetNodeId);
+    checkConnection(); assertInScope(node, scope);
+    const checkScope = () => {
+      checkConnection(); assertInScope(node, scope);
+      if (figma.currentPage.id !== page.id) evidenceFailure("EVIDENCE_ACTIVE_PAGE_CHANGED");
+    };
+    checkScope(); result.scopeVerification = "VERIFIED";
+    for (const field of request.fields) {
+      checkScope();
+      try {
+        const record = await evidenceField(node, field, request, scope);
+        checkScope();
+        if (!record.status) record.status = "VERIFIED";
+        if (record.value !== undefined) {
+          record.sha256 = evidenceHash(record.value);
+          if (BridgeDesignRuntime.utf8ToBytes(JSON.stringify(record)).byteLength > EVIDENCE_FIELD_BYTES) evidenceFailure("NOT_VERIFIED_BUDGET_EXCEEDED");
+        }
+        result.fields[field] = record;
+      } catch (error) {
+        checkScope();
+        const status = EVIDENCE_ERROR_CODES.get(error) || "NOT_VERIFIED_READ_ERROR";
+        result.fields[field] = { status, complete: false };
+      }
+    }
+    checkScope(); result.complete = Object.values(result.fields).every(field => field.status === "VERIFIED" && field.complete);
+  }
+  checkConnection();
+  if (BridgeDesignRuntime.utf8ToBytes(JSON.stringify(result)).byteLength > EVIDENCE_RESPONSE_BYTES) evidenceFailure("EVIDENCE_RESPONSE_BUDGET_EXCEEDED");
+  result.sha256 = BridgeDesignRuntime.designSignature(result);
+  return result;
+}
+
 async function execute(command, message) {
   switch (command) {
     case "status":
@@ -906,6 +1288,7 @@ async function execute(command, message) {
         ownedPocNodes: pocPage ? pocPage.children.flatMap((node) => collectOwnedNodes(node)) : [],
       };
     case "scope_read_node": {
+      if (message.payload && Object.prototype.hasOwnProperty.call(message.payload, "evidence")) return await readNodeEvidence(message.payload);
       const node = figma.root.children.find((item) => item.id === message.payload?.targetNodeId) ??
         await figma.getNodeByIdAsync(message.payload?.targetNodeId || "");
       if (node?.type === "PAGE" && node.id !== figma.currentPage.id) {
