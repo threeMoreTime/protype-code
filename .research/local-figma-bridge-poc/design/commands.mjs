@@ -10,12 +10,27 @@ export function designPayload(command, input) {
   const allowed = new Set(['expectedFileIdentity', 'workspaceId', 'taskId', 'authorizationId',
     'revision', 'operationId', 'spec', 'runId', 'batchSize', 'timerUnit',
     'allowGlobalResources', 'nodeKey', 'scale', 'reconcile', 'adoptNativeFlow', 'auditOffset', 'auditLimit']);
+  if (command === 'scope_design_plan' || command === 'scope_design_apply') allowed.add('positionRecovery');
   for (const key of Object.keys(input)) if (!allowed.has(key)) throw new Error(`DESIGN_INPUT_UNKNOWN: ${key}`);
   validateDesignSpec(input.spec);
   if (typeof input.runId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(input.runId)) throw new Error('DESIGN_RUN_ID_INVALID');
   if (input.batchSize !== undefined && (!Number.isInteger(input.batchSize) || input.batchSize < 1 || input.batchSize > 500)) throw new Error('DESIGN_BATCH_INVALID');
   if (input.timerUnit !== undefined && !['seconds', 'milliseconds'].includes(input.timerUnit)) throw new Error('DESIGN_TIMER_UNIT_INVALID');
   for (const key of ['allowGlobalResources', 'reconcile']) if (input[key] !== undefined && typeof input[key] !== 'boolean') throw new Error(`DESIGN_${key}_INVALID`);
+  if (Object.hasOwn(input, 'positionRecovery')) {
+    const recovery = input.positionRecovery;
+    const applying = command === 'scope_design_apply';
+    const keys = applying ? ['nodeKeys', 'planSignature'] : ['nodeKeys'];
+    if (!recovery || typeof recovery !== 'object' || Array.isArray(recovery) ||
+        Object.keys(recovery).length !== keys.length || !keys.every(key => Object.hasOwn(recovery, key)) ||
+        !Array.isArray(recovery.nodeKeys) || recovery.nodeKeys.length < 1 || recovery.nodeKeys.length > 20 ||
+        new Set(recovery.nodeKeys).size !== recovery.nodeKeys.length ||
+        !recovery.nodeKeys.every(key => typeof key === 'string' && input.spec.nodes.some(node => node.key === key && node.type === 'FRAME')) ||
+        applying && (input.reconcile !== true || typeof recovery.planSignature !== 'string' || !/^[a-f0-9]{64}$/.test(recovery.planSignature)) ||
+        Object.hasOwn(input, 'adoptNativeFlow') || input.allowGlobalResources === true) {
+      throw new Error('DESIGN_POSITION_RECOVERY_INVALID');
+    }
+  }
   if (Object.hasOwn(input, 'adoptNativeFlow')) {
     const adoption = input.adoptNativeFlow;
     const keys = ['pendingOperationId', 'flowSnapshotSignature', 'reactionSnapshotSignature'];
@@ -34,7 +49,7 @@ export function designPayload(command, input) {
     if (!input.spec.nodes.some(node => node.key === input.nodeKey)) throw new Error('DESIGN_EXPORT_NODE_INVALID');
     if (input.scale !== undefined && (typeof input.scale !== 'number' || !Number.isFinite(input.scale) || input.scale < 1 || input.scale > 4)) throw new Error('DESIGN_EXPORT_SCALE_INVALID');
   } else if (input.nodeKey !== undefined || input.scale !== undefined) throw new Error('DESIGN_EXPORT_FIELDS_INVALID');
-  const payload = Object.fromEntries(['spec', 'runId', 'batchSize', 'timerUnit', 'allowGlobalResources', 'nodeKey', 'scale', 'reconcile', 'adoptNativeFlow', 'auditOffset', 'auditLimit']
+  const payload = Object.fromEntries(['spec', 'runId', 'batchSize', 'timerUnit', 'allowGlobalResources', 'nodeKey', 'scale', 'reconcile', 'adoptNativeFlow', 'positionRecovery', 'auditOffset', 'auditLimit']
     .filter(key => input[key] !== undefined).map(key => [key, input[key]]));
   if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 7 * 1024 * 1024) throw new Error('DESIGN_TRANSPORT_BUDGET_EXCEEDED: split the input into scoped design packages');
   return payload;

@@ -885,10 +885,287 @@ export function createDesignRuntime(figma, guards) {
     ensure(utf8ToBytes(JSON.stringify(result)).byteLength < 7 * 1024 * 1024, 'DESIGN_AUDIT_RESPONSE_BUDGET_EXCEEDED: reduce auditLimit or split the specification');
     return result;
   }
+  // Recovery is deliberately narrower than generation: only a bounded set of
+  // generated FRAME positions, before finalization, may return to its recorded
+  // intent. Digests and node IDs remain the original evidence throughout.
+  const POSITION_RECOVERY_LIMIT = 60000;
+  const positionEqual = (a, b) => canonical(a) === canonical(b);
+  const positionGeneration = state => { const value = copy(state); delete value.positionRecovery; value.pending = null; return value; };
+  const positionMapping = ctx => [...ctx.map].map(([key, node]) => [key, node.id]);
+  function positionSceneTransform(node) {
+    if (node.type === 'PAGE') return;
+    const t = node.relativeTransform;
+    ensure((!['FRAME', 'COMPONENT'].includes(node.type) || node.layoutMode === 'NONE') && Array.isArray(t) && t.length === 2 &&
+      t.every(row => Array.isArray(row) && row.length === 3 && row.every(Number.isFinite)) &&
+      t[0][0] === 1 && t[0][1] === 0 && t[1][0] === 0 && t[1][1] === 1,
+    `DESIGN_POSITION_RECOVERY_TRANSFORM:${node.id}`);
+  }
+  function positionTransform(node) {
+    positionSceneTransform(node);
+    ensure(node.type === 'PAGE' || node.layoutMode === 'NONE', `DESIGN_POSITION_RECOVERY_TRANSFORM:${node.id}`);
+  }
+  function positionCapture(ctx) {
+    return designSignature({ ledger: readJson(ctx.scope.root, ctx.ledgerKey),
+      nodes: [...ctx.map].map(([key, node]) => ({ mapKey: key, id: node.id, raw: collectRawSnapshot(node),
+        parentId: node.parent?.id, children: node.children?.map(child => child.id),
+        transform: safe(node.relativeTransform), layoutMode: safe(node.layoutMode), reactions: normalizedReactions(node),
+        owner: node.getPluginData(NODE_SPEC), key: node.getPluginData(guards.specNodeKey),
+        state: node.getPluginData(NODE_STATE), intent: node.getPluginData(NODE_INTENT), digest: node.getPluginData(NODE_DIGEST),
+        mapping: entry(ctx, 'n', key), order: entry(ctx, 'order', key), reaction: entry(ctx, 'reactions', key) })),
+      pageChildren: ctx.scope.page.children.map(node => node.id), flows: safe(ctx.scope.page.flowStartingPoints) });
+  }
+  const positionProof = journal => designSignature({ version: journal.version, runId: journal.runId,
+    specSignature: journal.specSignature, generationSignature: journal.generationSignature,
+    mappingSignature: journal.mappingSignature, changes: journal.changes, parents: journal.parents, flows: journal.flows });
+  function positionStage(ctx, change, allowed) {
+    const node = ctx.map.get(change.key), raw = snapshot(ctx, node);
+    const tuples = [change.before,
+      { ...change.before, parentId: change.after.parentId },
+      { ...change.after, y: change.before.y }, change.after];
+    const actual = { parentId: node.parent?.id, x: node.x, y: node.y };
+    const stage = [...allowed].reverse().find(i => positionEqual(actual, tuples[i]) &&
+      designSignature(raw) === change.snapshots[i]);
+    ensure(stage !== undefined, `DESIGN_POSITION_RECOVERY_STATE_CONFLICT:${change.key}`);
+    return stage;
+  }
+  function positionOrders(ctx, journal, stages) {
+    const orders = new Map(journal.parents.map(parent => [parent.id, [...parent.children]]));
+    journal.changes.forEach((change, i) => {
+      if (stages[i] < 1) return;
+      const source = orders.get(change.before.parentId), target = orders.get(change.after.parentId);
+      ensure(source && target && source.includes(change.id), 'DESIGN_POSITION_RECOVERY_ORDER_CONFLICT');
+      source.splice(source.indexOf(change.id), 1);
+      const desired = journal.parents.find(parent => parent.id === change.after.parentId).wanted;
+      const rank = desired.indexOf(change.id);
+      let at = target.findIndex(id => desired.indexOf(id) > rank);
+      if (at < 0) at = target.length;
+      target.splice(at, 0, change.id);
+    });
+    return orders;
+  }
+  function checkPositionWorld(ctx, keys, journal) {
+    guards.assertInScope(ctx.scope.root, ctx.scope);
+    ensure(ctx.scope.root.type === 'PAGE' && ctx.existing && ctx.state.version === 1 &&
+      !ctx.state.complete && !ctx.state.finalized && (ctx.state.finalizeCursor ?? 0) === 0 &&
+      Number.isInteger(ctx.state.cursor) && ctx.state.cursor > 0 && ctx.state.cursor === ctx.map.size &&
+      ctx.state.cursor <= ctx.order.length && ctx.order.every((def, i) => ctx.map.has(def.key) === (i < ctx.state.cursor)) &&
+      positionEqual(readJson(ctx.scope.root, ctx.ledgerKey), ctx.state), 'DESIGN_POSITION_RECOVERY_CHECKPOINT_CONFLICT');
+    ensure(!ctx.state.pending || journal && journal.status === 'IN_PROGRESS' &&
+      ctx.state.pending.kind === 'position-recovery' && ctx.state.pending.runId === ctx.payload.runId,
+    'DESIGN_POSITION_RECOVERY_PENDING_CONFLICT');
+    const selected = new Set(keys), parents = new Map(), stages = [];
+    if (journal) {
+      ensure(journal.version === 1 && journal.runId === ctx.payload.runId && journal.specSignature === ctx.signature &&
+        journal.mappingSignature === designSignature(positionMapping(ctx)) &&
+        journal.generationSignature === designSignature(positionGeneration(ctx.state)) &&
+        journal.proofSignature === positionProof(journal) && positionEqual(journal.changes.map(change => change.key), keys) &&
+        ['IN_PROGRESS', 'COMPLETE'].includes(journal.status) && Number.isInteger(journal.cursor) &&
+        journal.cursor >= 0 && journal.cursor <= keys.length &&
+        (journal.status === 'COMPLETE' ? journal.cursor === keys.length && !journal.pending && !ctx.state.pending : Boolean(ctx.state.pending)) &&
+        (!journal.pending || journal.pending.index === journal.cursor && Number.isInteger(journal.pending.stage) &&
+          journal.pending.stage >= 0 && journal.pending.stage <= 3) &&
+        Array.isArray(journal.parents) && journal.parents.length <= keys.length * 2 &&
+        positionEqual(journal.flows, ctx.scope.page.flowStartingPoints ?? []),
+      'DESIGN_POSITION_RECOVERY_JOURNAL_CONFLICT');
+    }
+    for (const def of ctx.positionPrefix) {
+      const node = ctx.map.get(def.key), parent = def.parentKey ? ctx.map.get(def.parentKey) : ctx.scope.root;
+      ensure(node && entry(ctx, 'n', def.key)?.id === node.id && node.getPluginData(NODE_STATE) === 'complete',
+        `DESIGN_POSITION_RECOVERY_MAPPING_CONFLICT:${def.key}`);
+      // Specs do not declare rotation, skew or auto layout. Check all mapped
+      // scene nodes here because the legacy generation digest omits them.
+      positionSceneTransform(node);
+      if (selected.has(def.key)) {
+        ensure(def.type === 'FRAME' && parent && node.parent && node.getPluginData(NODE_INTENT) === designSignature(def),
+          `DESIGN_POSITION_RECOVERY_CANDIDATE_INVALID:${def.key}`);
+        for (const chain of [def, ctx.definitions.get(ctx.idToKey.get(node.parent.id))]) {
+          let current = chain;
+          while (current) {
+            ensure(!['COMPONENT', 'INSTANCE'].includes(current.type) &&
+              (current.key === def.key || !selected.has(current.key)), 'DESIGN_POSITION_RECOVERY_COMPONENT_UNSUPPORTED');
+            current = current.parentKey && ctx.definitions.get(current.parentKey);
+          }
+        }
+        for (const item of [node, parent, node.parent]) {
+          positionTransform(item);
+          if (item.type !== 'PAGE') {
+            ensure(ctx.map.get(ctx.idToKey.get(item.id)) === item, 'DESIGN_POSITION_RECOVERY_PARENT_INVALID');
+            guards.assertTaskOwned(item, ctx.ownership);
+          }
+        }
+        ensure(parent.type !== 'PAGE' || node.parent === parent, 'DESIGN_POSITION_RECOVERY_ROOT_REPARENT_UNSUPPORTED');
+        const raw = collectRawSnapshot(node), normalized = { ...raw, x: def.x, y: def.y,
+          parentKey: parent.getPluginData(guards.specNodeKey) ?? '' };
+        ensure(node.getPluginData(NODE_DIGEST) === designSignature(semanticSnapshot(ctx, normalized)),
+          `DESIGN_POSITION_RECOVERY_CONTENT_CONFLICT:${def.key}`);
+        checkReadback(ctx, def, node, normalized);
+        for (const child of node.children) {
+          guards.assertTaskOwned(child, ctx.ownership);
+          ensure(child.getPluginData(NODE_SPEC) === ctx.ns && ctx.map.get(ctx.idToKey.get(child.id)) === child,
+            `DESIGN_FOREIGN_CHILD:${def.key}`);
+        }
+        parents.set(parent.id, parent); parents.set(node.parent.id, node.parent);
+        if (journal) {
+          const i = keys.indexOf(def.key), change = journal.changes[i];
+          ensure(change.id === node.id && change.after.parentId === parent.id &&
+            change.after.x === def.x && change.after.y === def.y && change.digest === node.getPluginData(NODE_DIGEST) &&
+            change.intent === node.getPluginData(NODE_INTENT) && Array.isArray(change.snapshots) &&
+            change.snapshots.length === 4 && change.snapshots.every(value => /^[a-f0-9]{64}$/.test(value)),
+          'DESIGN_POSITION_RECOVERY_JOURNAL_CONFLICT');
+          stages[i] = positionStage(ctx, change, i < journal.cursor ? [3] : i === journal.cursor && journal.pending
+            ? [journal.pending.stage, Math.min(3, journal.pending.stage + 1)] : [0]);
+        }
+      } else {
+        ensure(node.parent === parent, `DESIGN_POSITION_RECOVERY_PARENT_CONFLICT:${def.key}`);
+        const raw = checkNode(ctx, def, node); checkReadback(ctx, def, node, raw);
+      }
+      const reaction = entry(ctx, 'reactions', def.key), actual = normalizedReactions(node);
+      ensure(reaction ? reaction.digest === reactionDigest(ctx, node, reaction) :
+        actual.length === 0 || positionEqual(actual, nativeReactions(ctx, def)), `DESIGN_REACTION_USER_EDIT_CONFLICT:${def.key}`);
+      if ('children' in node && node.type !== 'INSTANCE') {
+        const expected = entry(ctx, 'order', def.key);
+        const wanted = expected ? recordedOrder(ctx, expected) : (ctx.positionChildren.get(def.key) ?? []).map(child => child.key);
+        ensure(positionEqual(node.children.filter(child => !selected.has(ctx.idToKey.get(child.id))).map(child => ctx.idToKey.get(child.id)),
+          wanted.filter(key => !selected.has(key))), `DESIGN_POSITION_RECOVERY_LAYER_CONFLICT:${def.key}`);
+      }
+    }
+    const pageOwned = ctx.scope.page.children.filter(node => node.getPluginData(NODE_SPEC) === ctx.ns);
+    ensure(positionEqual(pageOwned.filter(node => !selected.has(ctx.idToKey.get(node.id))).map(node => ctx.idToKey.get(node.id)),
+      (ctx.positionChildren.get(null) ?? []).filter(def => !selected.has(def.key)).map(def => def.key)),
+    'DESIGN_POSITION_RECOVERY_PAGE_ORDER_CONFLICT');
+    for (const [key, style] of ctx.styles) ensure(entry(ctx, 'style', key)?.digest === designSignature(styleSnapshot(style)), `DESIGN_STYLE_USER_EDIT_CONFLICT:${key}`);
+    for (const [key, variable] of ctx.variables) ensure(entry(ctx, 'variable', key)?.digest === designSignature(variableSnapshot(variable)), `DESIGN_VARIABLE_USER_EDIT_CONFLICT:${key}`);
+    if (ctx.collection) ensure(entry(ctx, 'collection', 'colors')?.digest === designSignature(collectionSnapshot(ctx.collection)), 'DESIGN_COLLECTION_USER_EDIT_CONFLICT');
+    checkFlowOwnership(ctx);
+    if (journal) {
+      for (const record of journal.parents) {
+        const parent = record.id === ctx.scope.page.id ? ctx.scope.page : ctx.map.get(ctx.idToKey.get(record.id));
+        ensure(parent && Array.isArray(record.children) && Array.isArray(record.wanted) &&
+          record.children.length <= 25000 && record.wanted.length <= 25000, 'DESIGN_POSITION_RECOVERY_JOURNAL_CONFLICT');
+        positionTransform(parent);
+        if (parent.type !== 'PAGE') guards.assertTaskOwned(parent, ctx.ownership);
+        parents.set(parent.id, parent);
+      }
+      let orders = positionOrders(ctx, journal, stages);
+      const ordersMatch = () => [...orders].every(([id, children]) => positionEqual(parents.get(id).children.map(node => node.id), children));
+      // Equal geometry can make the before/after reparent tuples identical.
+      // Parent order then disambiguates the one pending native setter.
+      if (!ordersMatch() && journal.pending && stages[journal.cursor] > journal.pending.stage) {
+        stages[journal.cursor] = positionStage(ctx, journal.changes[journal.cursor], [journal.pending.stage]);
+        orders = positionOrders(ctx, journal, stages);
+      }
+      for (const [id, children] of orders) ensure(positionEqual(parents.get(id).children.map(node => node.id), children),
+        'DESIGN_POSITION_RECOVERY_ORDER_CONFLICT');
+    }
+    return { parents, stages };
+  }
+  async function positionRecovery(ctx) {
+    const request = ctx.payload.positionRecovery;
+    ensure(['scope_design_plan', 'scope_design_apply'].includes(ctx.message.command) && request &&
+      typeof request === 'object' && !Array.isArray(request) && Object.keys(request).every(key => ['nodeKeys', 'planSignature'].includes(key)) &&
+      Array.isArray(request.nodeKeys) && request.nodeKeys.length >= 1 && request.nodeKeys.length <= 20 &&
+      request.nodeKeys.every(key => typeof key === 'string' && ctx.map.has(key)) && new Set(request.nodeKeys).size === request.nodeKeys.length,
+    'DESIGN_POSITION_RECOVERY_REQUEST_INVALID');
+    const planning = ctx.message.command === 'scope_design_plan', keys = request.nodeKeys;
+    ensure(planning ? request.planSignature === undefined : ctx.payload.reconcile === true &&
+      typeof request.planSignature === 'string' && /^[a-f0-9]{64}$/.test(request.planSignature), 'DESIGN_POSITION_RECOVERY_RECONCILE_REQUIRED');
+    ensure(utf8ToBytes(canonical(ctx.state)).length <= POSITION_RECOVERY_LIMIT, 'DESIGN_POSITION_RECOVERY_LEDGER_BUDGET');
+    // This operation cannot advance generation. Index only immutable spec
+    // definitions in its fixed prefix; every native read and world guard stays fresh.
+    ctx.positionPrefix = ctx.order.slice(0, ctx.state.cursor);
+    ctx.positionChildren = new Map();
+    for (const def of ctx.positionPrefix) {
+      if (!ctx.positionChildren.has(def.parentKey)) ctx.positionChildren.set(def.parentKey, []);
+      ctx.positionChildren.get(def.parentKey).push(def);
+    }
+    const beforeAwait = positionCapture(ctx);
+    await fonts(ctx, false); await readResources(ctx);
+    ensure(beforeAwait === positionCapture(ctx), 'DESIGN_POSITION_RECOVERY_STALE_WORLD');
+    let journal = ctx.state.positionRecovery;
+    const checked = checkPositionWorld(ctx, keys, journal);
+    if (!journal) {
+      const parents = [...checked.parents.values()].map(parent => ({ id: parent.id,
+        children: parent.children.map(child => child.id), wanted: parent.type === 'PAGE' ? parent.children.filter(child =>
+          !keys.includes(ctx.idToKey.get(child.id)) || ctx.definitions.get(ctx.idToKey.get(child.id))?.parentKey === null).map(child => child.id) :
+          (entry(ctx, 'order', ctx.idToKey.get(parent.id)) ? recordedOrder(ctx, entry(ctx, 'order', ctx.idToKey.get(parent.id))) :
+            (ctx.positionChildren.get(ctx.idToKey.get(parent.id)) ?? []).map(def => def.key)).map(key => ctx.map.get(key).id) }));
+      journal = { version: 1, runId: ctx.payload.runId, specSignature: ctx.signature,
+        generationSignature: designSignature(positionGeneration(ctx.state)), mappingSignature: designSignature(positionMapping(ctx)),
+        status: 'IN_PROGRESS', cursor: 0, pending: null, parents, flows: copy(ctx.scope.page.flowStartingPoints ?? []),
+        changes: keys.map(key => {
+          const node = ctx.map.get(key), def = ctx.definitions.get(key), parent = def.parentKey ? ctx.map.get(def.parentKey) : ctx.scope.root;
+          const before = { parentId: node.parent.id, x: node.x, y: node.y }, after = { parentId: parent.id, x: def.x, y: def.y };
+          const raw = snapshot(ctx, node), targetParentKey = parent.getPluginData(guards.specNodeKey) ?? '';
+          return { key, id: node.id, before, after, digest: node.getPluginData(NODE_DIGEST), intent: node.getPluginData(NODE_INTENT),
+            snapshots: [raw, { ...raw, parentKey: targetParentKey }, { ...raw, parentKey: targetParentKey, x: after.x },
+              { ...raw, parentKey: targetParentKey, x: after.x, y: after.y }].map(designSignature) };
+        }) };
+      journal.proofSignature = positionProof(journal);
+    }
+    const planSignature = designSignature({ runId: ctx.payload.runId, specSignature: ctx.signature,
+      requestedKeys: keys, world: positionCapture(ctx), journal });
+    const wasComplete = journal.status === 'COMPLETE';
+    const result = (status, extra = {}) => ({ status, runId: ctx.payload.runId, specId: ctx.spec.id,
+      specSignature: ctx.signature, checkpoint: checkpoint(ctx), positionRecovery: { version: 1, maxStagesPerRequest: 1,
+        status: journal.status === 'COMPLETE' ? 'COMPLETE' : planning ? 'PLANNED' : 'IN_PROGRESS', nodeKeys: copy(keys), planSignature,
+        changes: journal.changes.map(({ key, id, before, after }) => ({ key, id, before: copy(before), after: copy(after) })),
+        ...(!planning ? { acceptedPlanSignature: request.planSignature } : {}),
+        ...(wasComplete ? { idempotent: true } : {}) }, fontSubstitutions: ctx.substitutions, ...extra });
+    if (planning) return result(ctx.state.pending ? 'NEEDS_RECONCILIATION' : 'PLANNED', { writes: 0 });
+    ensure(request.planSignature === planSignature, 'DESIGN_POSITION_RECOVERY_STALE_SIGNATURE');
+    if (journal.status === 'COMPLETE') return result('IN_PROGRESS', { writes: 0, nextAction: 'apply-next-batch' });
+    try {
+      if (!ctx.state.positionRecovery) {
+        ctx.state.positionRecovery = journal;
+        ctx.state.pending = { kind: 'position-recovery', runId: ctx.payload.runId, operationId: ctx.message.operationId };
+        ensure(utf8ToBytes(canonical(ctx.state)).length <= POSITION_RECOVERY_LIMIT, 'DESIGN_POSITION_RECOVERY_LEDGER_BUDGET');
+        save(ctx);
+      }
+      if (journal.cursor < journal.changes.length) {
+        const i = journal.cursor, change = journal.changes[i], node = ctx.map.get(change.key);
+        if (!journal.pending) { journal.pending = { index: i, stage: 0 }; save(ctx); }
+        let stage = checkPositionWorld(ctx, keys, journal).stages[i];
+        if (stage < 3) {
+          journal.pending.stage = stage; save(ctx);
+          checkPositionWorld(ctx, keys, journal);
+          if (stage === 0 && node.parent.id !== change.after.parentId || stage === 0 &&
+            !positionEqual(node.parent.children.map(child => child.id), positionOrders(ctx, journal,
+              journal.changes.map((_, index) => index <= i ? index === i ? 1 : 3 : 0)).get(change.after.parentId))) {
+            const parent = ctx.map.get(ctx.idToKey.get(change.after.parentId)) ?? ctx.scope.page;
+            const order = positionOrders(ctx, journal, journal.changes.map((_, index) => index <= i ? index === i ? 1 : 3 : 0)).get(parent.id);
+            ensure(typeof parent.insertChild === 'function', 'DESIGN_POSITION_RECOVERY_INSERT_UNAVAILABLE');
+            write(); parent.insertChild(order.indexOf(node.id), node);
+          }
+          if (stage === 1 && node.x !== change.after.x) { write(); node.x = change.after.x; }
+          if (stage === 2 && node.y !== change.after.y) { write(); node.y = change.after.y; }
+          positionStage(ctx, change, [stage + 1]);
+          checkPositionWorld(ctx, keys, journal);
+          stage += 1; journal.pending.stage = stage; save(ctx);
+          checkPositionWorld(ctx, keys, journal);
+        }
+        if (stage === 3) { journal.cursor += 1; journal.pending = null; save(ctx); }
+        // Bound host property reads as well as setters. A new read-only plan
+        // must bind each next stage, including the separate final commit.
+        const response = result('IN_PROGRESS', { nextAction: 'plan' });
+        response.positionRecovery.checkpointed = true;
+        return response;
+      }
+      checkExisting(ctx); checkPositionWorld(ctx, keys, journal);
+      journal.status = 'COMPLETE'; ctx.state.pending = null; save(ctx);
+      checkExisting(ctx); checkPositionWorld(ctx, keys, journal);
+      return result('IN_PROGRESS', { nextAction: 'apply-next-batch' });
+    } catch (error) {
+      ctx.state = readJson(ctx.scope.root, ctx.ledgerKey);
+      journal = ctx.state.positionRecovery ?? journal;
+      return result('PARTIAL_FAILURE', { error: String(error.message).slice(0, 500), nextAction: 'plan',
+        replay: 'PROHIBITED_UNTIL_READBACK_RECONCILIATION' });
+    }
+  }
   async function execute(message) {
     ensure(!busy, 'DESIGN_RUNTIME_BUSY'); busy = true;
     try {
       const ctx = await context(message);
+      if (ctx.payload.positionRecovery !== undefined) return await positionRecovery(ctx);
       if (ctx.payload.adoptNativeFlow !== undefined) ensure(message.command === 'scope_design_apply' &&
         ctx.payload.reconcile === true && ctx.state.pending?.kind === 'reactions', 'DESIGN_NATIVE_FLOW_ADOPTION_INVALID');
       await fonts(ctx, message.command === 'scope_design_apply');

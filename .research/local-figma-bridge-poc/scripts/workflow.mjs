@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, rename, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, access, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
@@ -58,6 +58,10 @@ export function validateSessionRequest(request) {
   if (Object.hasOwn(request, 'adoptNativeFlow') && request.command !== 'reconcile') {
     throw new Error('SESSION_NATIVE_FLOW_ADOPTION_REQUIRES_RECONCILE');
   }
+  if (Object.hasOwn(request, 'positionRecovery') &&
+      (!['plan', 'reconcile'].includes(request.command) || (request.batches ?? 1) !== 1 || Object.hasOwn(request, 'adoptNativeFlow'))) {
+    throw new Error('SESSION_POSITION_RECOVERY_REQUIRES_SINGLE_PLAN_OR_RECONCILE');
+  }
 }
 const readEvidenceSchema = z.object({
   fields: z.array(z.enum(['geometry', 'vectorPaths', 'text', 'paints', 'mask', 'layout', 'component', 'children']))
@@ -72,6 +76,77 @@ export function readNodeSessionArgs(request) {
   for (const key of Object.keys(request)) if (!['command', 'targetNodeId', 'evidence'].includes(key)) throw new Error('SESSION_READ_NODE_FIELDS_INVALID');
   return { targetNodeId: request.targetNodeId, ...(Object.hasOwn(request, 'evidence') ? { evidence: readEvidenceSchema.parse(request.evidence) } : {}) };
 }
+// The native receipt signs canonical JSON, rather than the on-disk JSON bytes.
+const canonicalReceiptJSON = value => Array.isArray(value) ? `[${value.map(canonicalReceiptJSON).join(',')}]`
+  : value && typeof value === 'object' ? `{${Object.keys(value).filter(key => value[key] !== undefined).sort()
+    .map(key => `${JSON.stringify(key)}:${canonicalReceiptJSON(value[key])}`).join(',')}}` : JSON.stringify(value);
+const receiptSignature = value => createHash('sha256').update(canonicalReceiptJSON(value)).digest('hex');
+export function validatePositionRecoveryReceipt(request, result, config, spec, plan) {
+  if (!Object.hasOwn(request, 'positionRecovery')) return;
+  const invalid = () => { throw new Error('POSITION_RECOVERY_RECEIPT_INVALID'); };
+  const recovery = result?.positionRecovery, checkpoint = result?.checkpoint;
+  const planning = request.command === 'plan';
+  const expectedKeys = request.positionRecovery.nodeKeys;
+  if (result?.runId !== config.runId || result.specId !== spec.id || result.specSignature !== receiptSignature(spec) ||
+      !['PLANNED', 'NEEDS_RECONCILIATION', 'IN_PROGRESS', 'PARTIAL_FAILURE'].includes(result.status) ||
+      planning && (!['PLANNED', 'NEEDS_RECONCILIATION'].includes(result.status) || result.writes !== 0) ||
+      !checkpoint || !Number.isInteger(checkpoint.applied) || checkpoint.applied < 1 || checkpoint.applied > spec.nodes.length ||
+      checkpoint.total !== spec.nodes.length || checkpoint.finalizedNodes !== 0 || checkpoint.finalized !== false ||
+      recovery?.version !== 1 || !['PLANNED', 'IN_PROGRESS', 'COMPLETE'].includes(recovery.status) ||
+      typeof recovery.planSignature !== 'string' || !/^[a-f0-9]{64}$/.test(recovery.planSignature) ||
+      canonicalReceiptJSON(recovery.nodeKeys) !== canonicalReceiptJSON(expectedKeys) ||
+      !Array.isArray(recovery.changes) || recovery.changes.length !== expectedKeys.length ||
+      new Set(recovery.changes.map(change => change.id)).size !== expectedKeys.length) invalid();
+  for (let index = 0; index < expectedKeys.length; index++) {
+    const change = recovery.changes[index], def = spec.nodes.find(node => node.key === expectedKeys[index]);
+    if (change?.key !== def?.key || def.type !== 'FRAME' || !/^\d+:\d+$/.test(change.id ?? '') ||
+        !['before', 'after'].every(key => /^\d+:\d+$/.test(change[key]?.parentId ?? '') &&
+          Number.isFinite(change[key]?.x) && Number.isFinite(change[key]?.y)) ||
+        change.after.x !== def.x || change.after.y !== def.y) invalid();
+  }
+  if (!planning) {
+    if (!plan || recovery.acceptedPlanSignature !== request.positionRecovery.planSignature ||
+        plan.positionRecovery?.planSignature !== request.positionRecovery.planSignature ||
+        canonicalReceiptJSON(recovery.changes) !== canonicalReceiptJSON(plan.positionRecovery.changes) ||
+        !['applied', 'total', 'finalizedNodes', 'finalized'].every(key => checkpoint[key] === plan.checkpoint[key])) invalid();
+    const checkpointed = Object.hasOwn(recovery, 'checkpointed');
+    if (result.status === 'IN_PROGRESS') {
+      if (recovery.status === 'COMPLETE') {
+        if (checkpointed || checkpoint.pending !== null) invalid();
+      } else if (recovery.status === 'IN_PROGRESS') {
+        const pending = checkpoint.pending;
+        if (recovery.checkpointed !== true || result.nextAction !== 'plan' || !pending ||
+            typeof pending !== 'object' || Array.isArray(pending) || pending.kind !== 'position-recovery' ||
+            pending.runId !== config.runId ||
+            typeof pending.operationId !== 'string' || !/^op-[A-Za-z0-9_-]{8,100}$/.test(pending.operationId) ||
+            !Object.keys(pending).every(key => ['kind', 'runId', 'operationId'].includes(key))) invalid();
+      } else invalid();
+    } else if (result.status === 'PARTIAL_FAILURE') {
+      if (checkpointed || recovery.status !== 'IN_PROGRESS' || checkpoint.pending?.kind !== 'position-recovery') invalid();
+    } else invalid();
+  }
+}
+export async function loadPositionRecoveryPlan(request, config, spec) {
+  if (!Object.hasOwn(request, 'positionRecovery') || request.command === 'plan') return undefined;
+  const required = () => { throw new Error('POSITION_RECOVERY_PLAN_REQUIRED'); };
+  const files = await readdir(config.outDir).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
+  const candidates = files.filter(name => name.startsWith(`${config.runId}.plan.op-`) && name.endsWith('.json'));
+  if (candidates.length > 1000) required();
+  const valid = [];
+  for (const name of candidates) {
+    let plan;
+    try { plan = await json(path.join(config.outDir, name)); } catch (error) { if (error instanceof SyntaxError) continue; throw error; }
+    const captured = Date.parse(plan.collectedAt ?? plan.capturedAt ?? '');
+    if (!Number.isFinite(captured) || captured > Date.now() || Date.now() - captured > 5 * 60000 ||
+        plan.expectedFileIdentity !== config.fileIdentity || plan.positionRecovery?.maxStagesPerRequest !== 1 ||
+        plan.positionRecovery.planSignature !== request.positionRecovery.planSignature) continue;
+    try { validatePositionRecoveryReceipt({ command: 'plan', positionRecovery: { nodeKeys: request.positionRecovery.nodeKeys } }, plan, config, spec); }
+    catch (error) { if (error.message === 'POSITION_RECOVERY_RECEIPT_INVALID') continue; throw error; }
+    valid.push({ plan, captured });
+  }
+  if (!valid.length) required();
+  return valid.sort((a, b) => b.captured - a.captured)[0].plan;
+}
 export function designSessionArgs(config, request, spec, grant, operationId = `op-${randomUUID()}`) {
   validateSessionRequest(request);
   const command = request.command;
@@ -83,6 +158,7 @@ export function designSessionArgs(config, request, spec, grant, operationId = `o
     ...(command === 'audit' && config.auditLimit !== undefined ? { auditLimit: config.auditLimit } : {}),
     ...(command === 'reconcile' ? { reconcile: true } : {}),
     ...(Object.hasOwn(request, 'adoptNativeFlow') ? { adoptNativeFlow: request.adoptNativeFlow } : {}),
+    ...(Object.hasOwn(request, 'positionRecovery') ? { positionRecovery: request.positionRecovery } : {}),
     ...(command === 'export' ? { nodeKey: request.nodeKey, scale: request.scale ?? 1 } : {}) };
   designPayload(`scope_design_${command === 'reconcile' ? 'apply' : command === 'export' ? 'export_png' : command}`, args);
   return args;
@@ -141,6 +217,7 @@ export async function session(configFile) {
         if (grant.fileIdentity !== config.fileIdentity || grant.workspaceId !== WORKSPACE_ID || grant.taskId !== TASK_ID) throw new Error('GRANT_CONFIG_MISMATCH');
         const commandName = `scope_design_${command === 'reconcile' ? 'apply' : command === 'export' ? 'export_png' : command}`;
         const args = designSessionArgs(config, request, spec, grant);
+        const recoveryPlan = await loadPositionRecoveryPlan(request, config, spec);
         const statePath = path.join(config.outDir, `${config.runId}.state.json`);
         let prior = null;
         try { prior = await json(statePath); } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -152,6 +229,7 @@ export async function session(configFile) {
           operationId: args.operationId, status: 'OUTCOME_UNKNOWN' };
         if (commandName === 'scope_design_apply') await save(statePath, state);
         const result = await call(`figma_${commandName}`, args);
+        validatePositionRecoveryReceipt(request, result.value, config, spec, recoveryPlan);
         if (command === 'audit') {
           const assembler = createAuditAssembler();
           let next = assembler.add(result.value);

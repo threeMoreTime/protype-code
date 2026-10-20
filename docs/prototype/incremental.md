@@ -50,3 +50,25 @@ npm run prototype -- --input requirements-v2.md --id my-project --base prototype
 增量边界：此版本对通用定义和按页语义文件实施三方合并、影响分析与稳定摘要；单条页面需求变化不会改变其他页面分片的字节。HTML 和完整 DesignSpec 是聚合文件，会重新打包。运行采集需显式重新传入 --captures，不能把旧采集误认为新证据。
 
 不会自动把新 DesignSpec 打补丁到已有人工作品的 Figma 文件：现有引擎要求改变内容时使用新 spec ID，继续执行用户编辑保护。Figma 内的手工修改不能自动回灌为 PrototypeSpec，原生增量合并、更多前端框架、任意自然语言推理、PDF/OCR 仍属后续能力。这些边界在交付中保持 NOT_APPLIED / NOT_RUN，不伪报已完成。
+
+## 1.0 生成阶段的位置恢复
+
+位置恢复通过既有 plan/apply 的可选 positionRecovery 参数执行，不新增工具或改变 DesignSpec 1.0。仅适用于 PAGE 根范围内、已生成但尚未开始 finalize 的连续前缀；完整 finalized 作品不进入此通道。每次选择 1–20 个已生成 FRAME，只恢复到同一 spec 记录的父级和 x/y，保留节点 ID、原始 intent/digest 与生成进度。
+
+候选及其祖先不能是 COMPONENT/INSTANCE，选中的 FRAME 不能互为祖先；相关节点须保持单位平移、无旋转/斜切和自动布局。其他内容、样式、资源、图层顺序、reaction、flow、作用域或用户编辑存在变化时停止，不通过覆盖原始摘要放行。
+
+使用现有 workflow session，先发送只读请求：
+
+```json
+{"command":"plan","positionRecovery":{"nodeKeys":["frame-key"]}}
+```
+
+核对返回的节点、当前/目标位置及 planSignature，再显式提交同一 nodeKeys 的 reconcile：
+
+```json
+{"command":"reconcile","positionRecovery":{"nodeKeys":["frame-key"],"planSignature":"<已核对的64位SHA-256>"}}
+```
+
+workflow 要求同一 run 的已保存只读计划，记录实际文件身份、完整 spec 签名及匹配的恢复内容；计划最多保留五分钟。恢复请求不得组合多批次、全局资源创建或 adoptNativeFlow。每次请求最多推进一个检查点阶段；IN_PROGRESS / nextAction=plan 时必须重新只读 plan，核对新签名后再显式 reconcile，不循环自动推进。阶段记录和整个恢复 ledger 均有界。
+
+未知结果先读取当前计划与持久检查点，不能更换 operationId 盲目重放。恢复完成返回 apply-next-batch 后，才可继续原生成流程；位置恢复不会自行增加生成节点或执行 finalize。此通道不更改 spec 内容，不实现文字修订、任意 Figma 回灌或 1.1 原生视觉。真实宿主操作仍须取得实际文件、页面和根节点范围的授权；本地替身验证不代替真实 Figma 验收。

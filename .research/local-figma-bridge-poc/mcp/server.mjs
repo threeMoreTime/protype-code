@@ -132,6 +132,10 @@ export async function createMcpServer({ port = configuredPort(), stderr = proces
       description: `Scoped DesignSpec ${command.replace('scope_design_', '')}. Requires pairing, file allowlist, local authorization and a fresh operation ID. Never executes arbitrary JavaScript.`,
       inputSchema: z.object({
         ...WRITE_INPUT_SCHEMA, spec: z.record(z.unknown()), runId: z.string(),
+        ...(['scope_design_plan', 'scope_design_apply'].includes(command) ? { positionRecovery: z.object({
+          nodeKeys: z.array(z.string()).min(1).max(20),
+          planSignature: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+        }).strict().optional() } : {}),
         batchSize: z.number().int().min(1).max(500).optional(),
         timerUnit: z.enum(['seconds', 'milliseconds']).optional(),
         allowGlobalResources: z.boolean().optional(), reconcile: z.boolean().optional(),
