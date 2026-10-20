@@ -16,6 +16,7 @@
 
 ## 开发与参考
 
+- [提交规范](commit-conventions.md)：提交格式、原子边界、精确暂存、验证与授权规则。
 - [DesignSpec 1.0](reference/design-spec.md)：运行时数据契约；最终事实源为源码校验器。
 - [架构与授权边界](architecture/design-pipeline.md)：模块依赖、数据归属、失败语义。
 - [测试与维护](development.md)：构建源文件、检查命令、文档维护约定。
