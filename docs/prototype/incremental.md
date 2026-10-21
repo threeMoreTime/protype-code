@@ -72,3 +72,11 @@ npm run prototype -- --input requirements-v2.md --id my-project --base prototype
 workflow 要求同一 run 的已保存只读计划，记录实际文件身份、完整 spec 签名及匹配的恢复内容；计划最多保留五分钟。恢复请求不得组合多批次、全局资源创建或 adoptNativeFlow。每次请求最多推进一个检查点阶段；IN_PROGRESS / nextAction=plan 时必须重新只读 plan，核对新签名后再显式 reconcile，不循环自动推进。阶段记录和整个恢复 ledger 均有界。
 
 未知结果先读取当前计划与持久检查点，不能更换 operationId 盲目重放。恢复完成返回 apply-next-batch 后，才可继续原生成流程；位置恢复不会自行增加生成节点或执行 finalize。此通道不更改 spec 内容，不实现文字修订、任意 Figma 回灌或 1.1 原生视觉。真实宿主操作仍须取得实际文件、页面和根节点范围的授权；本地替身验证不代替真实 Figma 验收。
+
+## 原生文字修订边界
+
+原生文字窄通道要求相同 spec ID，除 source.revision 外所有非文字字段相同，节点顺序/key/type 相同，1–100 个独立 TEXT 仅 name/characters 变化，且不能有 COMPONENT/INSTANCE 祖先；还须完整 finalized ledger、相同 scope/baseSignature、原生 audit、资源/字体/用户编辑保护，并检查 base+target 整请求 7 MiB。
+
+DesignSpec 1.1 修改正文还要求原生基线非空、只有一个覆盖全文且与节点样式一致的分段、`textAutoResize=NONE`、尺寸不依赖 HUG/FILL。检查点同时预测顶层文字、分段文字和 UTF-16 起止边界；目标文字可等长、变长或清空。复杂分段或自动尺寸无法安全预测时，plan/apply 在写入 journal 和修改节点前明确拒绝；仅修改名称不受这项正文限制。1.0 的既有窄通道与恢复协议保持兼容。
+
+含 staged 资产的原生文字修订暂不放行：资产回执绑定原生成 runId 和 specSignature，文字修订的新 run 或目标 spec 签名会导致 DESIGN_ASSET_LEDGER_CONFLICT。不得通过复用生成 runId 绕过；即使文字修改返回 COMPLETE，重载后的目标 audit 仍可能失败。后续须保存并核验原始资产来源及恢复边界；旧账本只有 bindingHash 时不能反推来源，不自动重绑回执或迁移。

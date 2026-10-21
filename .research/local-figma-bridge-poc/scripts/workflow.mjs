@@ -38,7 +38,7 @@ export async function doctor() {
     liveFigma: 'NOT_RUN', manifest: path.join(root, 'plugin/manifest.json') };
 }
 export function readSessionConfig(input, directory) {
-  const keys = new Set(['fileIdentity', 'grantPath', 'specPath', 'runId', 'outDir', 'batchSize', 'timerUnit', 'allowGlobalResources', 'designTimeoutMs', 'auditLimit']);
+  const keys = new Set(['fileIdentity', 'grantPath', 'specPath', 'baseSpecPath', 'runId', 'outDir', 'batchSize', 'timerUnit', 'allowGlobalResources', 'designTimeoutMs', 'auditLimit']);
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('SESSION_CONFIG_INVALID');
   for (const key of Object.keys(input)) if (!keys.has(key)) throw new Error(`SESSION_CONFIG_UNKNOWN: ${key}`);
   if (!/^figma-file:[A-Za-z0-9_-]+$/.test(input.fileIdentity || '')) throw new Error('SESSION_FILE_IDENTITY_REQUIRED');
@@ -48,7 +48,7 @@ export function readSessionConfig(input, directory) {
   if (input.auditLimit !== undefined && (!Number.isInteger(input.auditLimit) || input.auditLimit < 1 || input.auditLimit > 2000)) {
     throw new Error('SESSION_AUDIT_LIMIT_INVALID: expected an integer from 1 to 2000');
   }
-  for (const key of ['grantPath', 'specPath', 'outDir']) if (input[key]) config[key] = path.resolve(directory, input[key]);
+  for (const key of ['grantPath', 'specPath', 'baseSpecPath', 'outDir']) if (input[key]) config[key] = path.resolve(directory, input[key]);
   config.outDir ||= path.resolve(directory, 'evidence');
   return config;
 }
@@ -66,6 +66,7 @@ export function validateSessionRequest(request) {
 const designCommands = {
   plan: 'scope_design_plan', apply: 'scope_design_apply', audit: 'scope_design_audit',
   reconcile: 'scope_design_apply', export: 'scope_design_export_png',
+  'text-plan': 'scope_design_text_plan', 'text-apply': 'scope_design_text_apply', 'text-reconcile': 'scope_design_text_apply',
   'assets-plan': 'scope_design_assets_plan', 'asset-stage': 'scope_design_asset_stage', 'asset-commit': 'scope_design_asset_commit',
 };
 const assetSessionCommands = new Set(['assets-plan', 'asset-stage', 'asset-commit']);
@@ -164,7 +165,28 @@ export async function loadPositionRecoveryPlan(request, config, spec) {
   if (!valid.length) required();
   return valid.sort((a, b) => b.captured - a.captured)[0].plan;
 }
-export function designSessionArgs(config, request, spec, grant, operationId = `op-${randomUUID()}`) {
+export function validateTextRevisionReceipt(command, result, config, spec, baseSpec) {
+  if (result?.status !== 'RECONCILED_UNCHANGED') return;
+  const invalid = () => { throw new Error('TEXT_RECONCILIATION_RECEIPT_INVALID'); };
+  if (command !== 'text-reconcile' || !baseSpec || result.writes !== 0 || result.baselineAuditStatus !== 'PASS' ||
+      result.revisionState !== 'NOT_STARTED' || result.runId !== config.runId || result.specId !== spec.id ||
+      result.baseSpecSignature !== receiptSignature(baseSpec) || result.specSignature !== receiptSignature(spec)) invalid();
+  const before = new Map(baseSpec.nodes.map(node => [node.key, node]));
+  const changes = spec.nodes.filter(node => node.type === 'TEXT' && before.get(node.key) &&
+    (node.name !== before.get(node.key).name || node.props.characters !== before.get(node.key).props.characters));
+  const checkpoint = result.checkpoint;
+  if (!changes.length || changes.length > 100 || !checkpoint || checkpoint.applied !== 0 ||
+      checkpoint.total !== changes.length || checkpoint.pending !== null || checkpoint.finalized !== false ||
+      !Array.isArray(result.changes) || result.changes.length !== changes.length ||
+      new Set(result.changes.map(change => change.id)).size !== changes.length) invalid();
+  for (let index = 0; index < changes.length; index++) {
+    const node = changes[index], previous = before.get(node.key), actual = result.changes[index];
+    if (actual.key !== node.key || !/^\d+:\d+$/.test(actual.id) ||
+        canonicalReceiptJSON(actual.before) !== canonicalReceiptJSON({ name: previous.name ?? previous.key, characters: previous.props.characters }) ||
+        canonicalReceiptJSON(actual.after) !== canonicalReceiptJSON({ name: node.name ?? node.key, characters: node.props.characters })) invalid();
+  }
+}
+export function designSessionArgs(config, request, spec, grant, operationId = `op-${randomUUID()}`, baseSpec) {
   validateSessionRequest(request);
   const command = request.command;
   if (!Object.hasOwn(designCommands, command)) throw new Error('UNKNOWN_SESSION_COMMAND');
@@ -177,12 +199,15 @@ export function designSessionArgs(config, request, spec, grant, operationId = `o
     designPayload(designCommands[command], args);
     return args;
   }
+  const textRevision = command.startsWith('text-');
+  if (textRevision && !baseSpec) throw new Error('SESSION_BASE_SPEC_REQUIRED');
   const args = { expectedFileIdentity: config.fileIdentity, workspaceId: WORKSPACE_ID, taskId: TASK_ID,
     authorizationId: grant.authorizationId, revision: grant.revision, operationId,
     spec, runId: config.runId, batchSize: config.batchSize ?? 100,
     timerUnit: config.timerUnit ?? 'milliseconds', allowGlobalResources: config.allowGlobalResources ?? false,
+    ...(textRevision ? { baseSpec } : {}),
     ...(command === 'audit' && config.auditLimit !== undefined ? { auditLimit: config.auditLimit } : {}),
-    ...(command === 'reconcile' ? { reconcile: true } : {}),
+    ...(['reconcile', 'text-reconcile'].includes(command) ? { reconcile: true } : {}),
     ...(Object.hasOwn(request, 'adoptNativeFlow') ? { adoptNativeFlow: request.adoptNativeFlow } : {}),
     ...(Object.hasOwn(request, 'positionRecovery') ? { positionRecovery: request.positionRecovery } : {}),
     ...(command === 'export' ? { nodeKey: request.nodeKey, scale: request.scale ?? 1 } : {}) };
@@ -212,7 +237,7 @@ export async function session(configFile) {
       image: result.content.find(item => item.type === 'image') };
   }
   await start();
-  output({ event: 'ready', commands: ['status', 'document', 'read-node', 'pair', 'restart', 'plan', 'apply', 'audit', 'reconcile', 'assets-plan', 'asset-stage', 'asset-commit', 'export', 'operation', 'quit'] });
+  output({ event: 'ready', commands: ['status', 'document', 'read-node', 'pair', 'restart', 'plan', 'apply', 'audit', 'reconcile', 'text-plan', 'text-apply', 'text-reconcile', 'assets-plan', 'asset-stage', 'asset-commit', 'export', 'operation', 'quit'] });
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   try {
     for await (const line of lines) {
@@ -239,28 +264,36 @@ export async function session(configFile) {
         for (let batch = 0; batch < batches; batch++) {
         if (!config.specPath || !config.grantPath || !config.runId) throw new Error('SESSION_SPEC_GRANT_RUN_REQUIRED');
         const spec = validateDesignSpec(await json(config.specPath));
+        const baseSpec = config.baseSpecPath ? validateDesignSpec(await json(config.baseSpecPath)) : undefined;
         const grant = await json(config.grantPath);
         if (grant.fileIdentity !== config.fileIdentity || grant.workspaceId !== WORKSPACE_ID || grant.taskId !== TASK_ID) throw new Error('GRANT_CONFIG_MISMATCH');
         const commandName = designCommands[command];
         const assetCommand = assetSessionCommands.has(command);
-        const mutation = ['scope_design_apply', 'scope_design_asset_stage', 'scope_design_asset_commit'].includes(commandName);
-        const args = designSessionArgs(config, request, spec, grant);
+        const mutation = ['scope_design_apply', 'scope_design_text_apply', 'scope_design_asset_stage', 'scope_design_asset_commit'].includes(commandName);
+        const args = designSessionArgs(config, request, spec, grant, undefined, baseSpec);
         const recoveryPlan = await loadPositionRecoveryPlan(request, config, spec);
         const statePath = path.join(config.outDir, `${config.runId}${assetCommand ? '.assets' : ''}.state.json`);
         let prior = null;
         try { prior = await json(statePath); } catch (error) { if (error.code !== 'ENOENT') throw error; }
         const digest = createHash('sha256').update(JSON.stringify(spec)).digest('hex');
+        const baseDigest = baseSpec ? createHash('sha256').update(JSON.stringify(baseSpec)).digest('hex') : undefined;
         if (prior && (prior.specSha256 !== digest || prior.fileIdentity !== config.fileIdentity)) throw new Error('RUN_INPUT_CHANGED: use a new run ID and scope');
+        if (prior && prior.baseSpecSha256 !== baseDigest) throw new Error('RUN_BASE_INPUT_CHANGED: use a new revision run ID');
         if (assetCommand && mutation && prior?.assets?.[request.assetKey]?.status === 'OUTCOME_UNKNOWN') throw new Error('ASSET_OUTCOME_UNKNOWN: assets-plan readback before another mutation');
-        if (command === 'apply' && prior?.status === 'OUTCOME_UNKNOWN') throw new Error('OUTCOME_UNKNOWN: audit then reconcile explicitly before another batch');
+        if (['apply', 'text-apply'].includes(command) && prior?.status === 'OUTCOME_UNKNOWN') throw new Error(command === 'apply'
+          ? 'OUTCOME_UNKNOWN: audit then reconcile explicitly before another batch'
+          : 'OUTCOME_UNKNOWN: text-plan readback then text-reconcile explicitly before another mutation');
         const state = { runId: config.runId, specId: spec.id, specSha256: digest,
           fileIdentity: config.fileIdentity, startedAt: prior?.startedAt ?? new Date().toISOString(),
+          ...(baseDigest ? { baseSpecSha256: baseDigest } : {}),
+          ...(command === 'text-reconcile' && prior ? { reconcilesOperationId: prior.operationId } : {}),
           operationId: args.operationId, status: 'OUTCOME_UNKNOWN' };
         const assetState = assetCommand ? { ...state, assets: { ...prior?.assets,
           ...(mutation ? { [request.assetKey]: { operationId: args.operationId, status: 'OUTCOME_UNKNOWN', command } } : {}) } } : null;
         if (mutation) await save(statePath, assetState ?? state);
         const result = await call(`figma_${commandName}`, args);
         validatePositionRecoveryReceipt(request, result.value, config, spec, recoveryPlan);
+        validateTextRevisionReceipt(command, result.value, config, spec, baseSpec);
         if (command === 'audit') {
           const assembler = createAuditAssembler();
           let next = assembler.add(result.value);

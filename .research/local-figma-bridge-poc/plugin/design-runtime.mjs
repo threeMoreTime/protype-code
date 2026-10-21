@@ -1091,6 +1091,298 @@ export function createDesignRuntime(figma, guards) {
     ensure(utf8ToBytes(JSON.stringify(result)).byteLength < 7 * 1024 * 1024, 'DESIGN_AUDIT_RESPONSE_BUDGET_EXCEEDED: reduce auditLimit or split the specification');
     return result;
   }
+  function textRevisionSpecs(payload) {
+    const base = validateDesignSpec(payload.baseSpec), target = validateDesignSpec(payload.spec);
+    const withoutRevision = value => {
+      const result = copy(value); delete result.nodes;
+      if (result.source) { delete result.source.revision; if (!Object.keys(result.source).length) delete result.source; }
+      return result;
+    };
+    ensure(base.id === target.id && canonical(withoutRevision(base)) === canonical(withoutRevision(target)) &&
+      base.nodes.length === target.nodes.length, 'DESIGN_TEXT_REVISION_SPEC_CONFLICT');
+    const definitions = new Map(base.nodes.map(def => [def.key, def])), changes = [];
+    for (let i = 0; i < base.nodes.length; i++) {
+      const before = base.nodes[i], after = target.nodes[i];
+      ensure(before.key === after.key && before.type === after.type, 'DESIGN_TEXT_REVISION_NODE_ORDER_CONFLICT');
+      if (canonical(before) === canonical(after)) continue;
+      ensure(before.type === 'TEXT', 'DESIGN_TEXT_REVISION_TEXT_ONLY');
+      const stripped = def => { const value = copy(def); delete value.name; delete value.props.characters; return value; };
+      ensure(canonical(stripped(before)) === canonical(stripped(after)), 'DESIGN_TEXT_REVISION_PROPERTY_CONFLICT');
+      let ancestor = before.parentKey && definitions.get(before.parentKey);
+      while (ancestor) {
+        ensure(!['COMPONENT', 'INSTANCE'].includes(ancestor.type), 'DESIGN_TEXT_REVISION_COMPONENT_UNSUPPORTED');
+        ancestor = ancestor.parentKey && definitions.get(ancestor.parentKey);
+      }
+      changes.push({ key: before.key, before, after });
+    }
+    ensure(changes.length >= 1 && changes.length <= 100, 'DESIGN_TEXT_REVISION_CHANGE_COUNT');
+    return { base, target, changes, baseSignature: designSignature(base), targetSignature: designSignature(target) };
+  }
+  function textRevisionRecord(ctx, change) {
+    const node = ctx.map.get(change.key), before = snapshot(ctx, node);
+    const middle = { ...before, name: change.after.name ?? change.after.key };
+    const characters = change.after.props.characters, after = { ...middle, characters };
+    if (ctx.spec.schemaVersion === '1.1' && characters !== before.characters) {
+      // A native characters setter also changes segment text and UTF-16 bounds.
+      // Predict only a homogeneous, fixed-size node; mixed styling and automatic
+      // geometry need a richer revision protocol and must fail before journaling.
+      ensure(before.textAutoResize === 'NONE' && !before.layoutDriven.width && !before.layoutDriven.height,
+        `DESIGN_TEXT_REVISION_GEOMETRY_UNSUPPORTED:${change.key}`);
+      const ranges = before.textRanges, range = ranges?.[0];
+      ensure(Array.isArray(ranges) && ranges.length === 1 && range.start === 0 &&
+        range.end === before.characters.length && range.characters === before.characters &&
+        RANGE_FIELDS.every(field => range[field] !== undefined && range[field] !== null &&
+          matchesExpected(range[field], before[field])), `DESIGN_TEXT_REVISION_RANGES_UNSUPPORTED:${change.key}`);
+      after.textRanges = characters ? [{ ...range, characters, end: characters.length }] : [];
+    }
+    return { key: change.key, id: node.id, baseIntent: designSignature(change.before), targetIntent: designSignature(change.after),
+      snapshots: [before, middle, after].map(designSignature) };
+  }
+  const textRevisionCheckpoint = journal => ({ applied: journal?.cursor ?? 0, total: journal?.changes.length ?? 0,
+    pending: copy(journal?.pending ?? null), finalized: journal?.status === 'COMPLETE' });
+  const revisionMappingSignature = ctx => designSignature([...ctx.map].map(([key, node]) => [key, node.id]));
+  const revisionChildrenSignature = ctx => designSignature((ctx.scope.root.children ?? []).map(node => node.id));
+  const revisionFlowSignature = ctx => designSignature(ctx.scope.page.flowStartingPoints ?? []);
+  const MAX_TEXT_REVISION_RUNS = 100;
+  const revisionRunId = value => typeof value === 'string' && /^[A-Za-z0-9._:-]{1,160}$/.test(value);
+  const revisionHash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+  function revisionUsedRuns(journal) {
+    // The first shipped journal has no predecessor fields. Later journals keep
+    // only a hashed summary and bounded run IDs, never recursive full journals.
+    if (journal.predecessor === undefined && journal.predecessorSignature === undefined) return [];
+    const previous = journal.predecessor;
+    ensure(previous && previous.version === 1 && revisionRunId(previous.runId) &&
+      revisionHash(previous.baseSignature) && revisionHash(previous.targetSignature) && revisionHash(previous.journalSignature) &&
+      previous.targetSignature === journal.baseSignature && journal.predecessorSignature === designSignature(previous) &&
+      Array.isArray(previous.usedRunIds) && previous.usedRunIds.length >= 1 &&
+      previous.usedRunIds.length < MAX_TEXT_REVISION_RUNS && previous.usedRunIds.every(revisionRunId) &&
+      new Set(previous.usedRunIds).size === previous.usedRunIds.length &&
+      previous.usedRunIds[previous.usedRunIds.length - 1] === previous.runId && !previous.usedRunIds.includes(journal.runId),
+    'DESIGN_TEXT_REVISION_PREDECESSOR_CONFLICT');
+    return previous.usedRunIds;
+  }
+  function revisionStages(record) {
+    return [
+      [record.snapshots[0], record.baseIntent, record.snapshots[0]],
+      [record.snapshots[1], record.baseIntent, record.snapshots[0]],
+      [record.snapshots[2], record.baseIntent, record.snapshots[0]],
+      [record.snapshots[2], record.targetIntent, record.snapshots[0]],
+      [record.snapshots[2], record.targetIntent, record.snapshots[2]],
+    ];
+  }
+  function revisionStage(ctx, change, record, allowed) {
+    const node = ctx.map.get(change.key);
+    guards.assertInScope(node, ctx.scope); guards.assertTaskOwned(node, ctx.ownership);
+    ensure(node.id === record.id && node.type === 'TEXT' && node.parent ===
+      (change.before.parentKey ? ctx.map.get(change.before.parentKey) : ctx.scope.root) &&
+      node.getPluginData(NODE_SPEC) === ctx.ns && node.getPluginData(guards.specNodeKey) === change.key &&
+      node.getPluginData(NODE_STATE) === 'complete' && entry(ctx, 'n', change.key)?.id === node.id,
+    `DESIGN_TEXT_REVISION_MAPPING_CONFLICT:${change.key}`);
+    const actual = [designSignature(snapshot(ctx, node)), node.getPluginData(NODE_INTENT), node.getPluginData(NODE_DIGEST)];
+    const stages = revisionStages(record);
+    const stage = [...allowed].reverse().find(index => canonical(actual) === canonical(stages[index]));
+    ensure(stage !== undefined, `DESIGN_TEXT_REVISION_STATE_CONFLICT:${change.key}`);
+    return stage;
+  }
+  function completedRevisionPredecessor(ctx, revision, previous) {
+    ensure(previous.version === 1 && revisionRunId(previous.runId) && revisionHash(previous.baseSignature) &&
+      previous.status === 'COMPLETE' && previous.pending === null && ctx.state.pending === null &&
+      ctx.signature === revision.baseSignature && ctx.state.specSignature === revision.baseSignature &&
+      previous.targetSignature === revision.baseSignature && Array.isArray(previous.changes) &&
+      previous.changes.length >= 1 && previous.changes.length <= 100 && previous.cursor === previous.changes.length &&
+      Array.isArray(previous.receipts) && previous.receipts.length === previous.changes.length &&
+      new Set(previous.changes.map(change => change.key)).size === previous.changes.length &&
+      new Set(previous.changes.map(change => change.id)).size === previous.changes.length &&
+      previous.mappingSignature === revisionMappingSignature(ctx) && previous.childrenSignature === revisionChildrenSignature(ctx) &&
+      previous.flowSignature === revisionFlowSignature(ctx), 'DESIGN_TEXT_REVISION_HANDOFF_CONFLICT');
+    const usedRunIds = [...revisionUsedRuns(previous), previous.runId];
+    ensure(!usedRunIds.includes(ctx.payload.runId), 'DESIGN_TEXT_REVISION_RUN_REUSED');
+    ensure(usedRunIds.length < MAX_TEXT_REVISION_RUNS, 'DESIGN_TEXT_REVISION_HISTORY_LIMIT');
+    for (let index = 0; index < previous.changes.length; index++) {
+      const record = previous.changes[index], def = ctx.definitions.get(record.key), receipt = previous.receipts[index];
+      ensure(def?.type === 'TEXT' && revisionHash(record.baseIntent) && record.targetIntent === designSignature(def) &&
+        Array.isArray(record.snapshots) && record.snapshots.length === 3 && record.snapshots.every(revisionHash) &&
+        receipt?.key === record.key && receipt.id === record.id && receipt.snapshotSignature === record.snapshots[2] &&
+        typeof receipt.operationId === 'string' && /^op-[A-Za-z0-9_-]{8,100}$/.test(receipt.operationId) &&
+        typeof receipt.observedAt === 'string' && Number.isFinite(Date.parse(receipt.observedAt)),
+      'DESIGN_TEXT_REVISION_HANDOFF_CONFLICT');
+      revisionStage(ctx, { key: def.key, before: def }, record, [4]);
+    }
+    return { version: 1, runId: previous.runId, baseSignature: previous.baseSignature,
+      targetSignature: previous.targetSignature, journalSignature: designSignature(previous), usedRunIds };
+  }
+  function checkRevisionWorld(ctx, revision, journal) {
+    guards.assertInScope(ctx.scope.root, ctx.scope);
+    if (ctx.scope.root.type !== 'PAGE') guards.assertTaskOwned(ctx.scope.root, ctx.ownership);
+    const changed = new Map(revision.changes.map((change, i) => [change.key, { change, i }]));
+    if (journal) {
+      revisionUsedRuns(journal);
+      ensure(journal.version === 1 && journal.runId === ctx.payload.runId && journal.baseSignature === revision.baseSignature &&
+        journal.targetSignature === revision.targetSignature && journal.changes.length === revision.changes.length &&
+        Number.isInteger(journal.cursor) && journal.cursor >= 0 && journal.cursor <= journal.changes.length &&
+        ['IN_PROGRESS', 'COMPLETE'].includes(journal.status) && Array.isArray(journal.receipts) &&
+        journal.receipts.length === journal.cursor && journal.mappingSignature === revisionMappingSignature(ctx) &&
+        journal.childrenSignature === revisionChildrenSignature(ctx) && journal.flowSignature === revisionFlowSignature(ctx),
+      'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+      ensure(!journal.pending || journal.pending.index === journal.cursor && journal.pending.key === revision.changes[journal.cursor]?.key &&
+        Number.isInteger(journal.pending.stage) && journal.pending.stage >= 0 && journal.pending.stage <= 3,
+      'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+      ensure(journal.status !== 'COMPLETE' || journal.cursor === journal.changes.length && !journal.pending,
+        'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+    }
+    for (const def of ctx.order) {
+      const node = ctx.map.get(def.key), item = changed.get(def.key);
+      ensure(node, `DESIGN_NODE_MISSING:${def.key}`);
+      ensure(node.type === def.type && node.parent === (def.parentKey ? ctx.map.get(def.parentKey) : ctx.scope.root) &&
+        node.getPluginData(NODE_SPEC) === ctx.ns && node.getPluginData(guards.specNodeKey) === def.key &&
+        node.getPluginData(NODE_STATE) === 'complete' && entry(ctx, 'n', def.key)?.id === node.id,
+      `DESIGN_TEXT_REVISION_MAPPING_CONFLICT:${def.key}`);
+      if (item && journal) {
+        const record = journal.changes[item.i];
+        ensure(record.key === item.change.key && record.baseIntent === designSignature(item.change.before) &&
+          record.targetIntent === designSignature(item.change.after) && Array.isArray(record.snapshots) &&
+          record.snapshots.length === 3 && record.snapshots.every(value => /^[a-f0-9]{64}$/.test(value)),
+        'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+        const allowed = item.i < journal.cursor ? [4] : item.i === journal.cursor && journal.pending ?
+          [journal.pending.stage, journal.pending.stage + 1] : [0];
+        revisionStage(ctx, item.change, record, allowed);
+        if (item.i < journal.cursor) ensure(journal.receipts[item.i]?.key === def.key &&
+          journal.receipts[item.i].id === node.id && journal.receipts[item.i].snapshotSignature === record.snapshots[2],
+        'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+      } else {
+        const raw = checkNode(ctx, def, node); checkReadback(ctx, def, node, raw);
+      }
+      ensure(canonical(normalizedReactions(node)) === canonical(nativeReactions(ctx, def)), `DESIGN_TEXT_REVISION_REACTION_CONFLICT:${def.key}`);
+      if ('children' in node && node.type !== 'INSTANCE') {
+        const children = ctx.children.get(def.key) ?? [];
+        ensure(canonical(node.children.map(child => ctx.idToKey.get(child.id))) === canonical([
+          ...children.filter(child => !child.props?.isFixed), ...children.filter(child => child.props?.isFixed),
+        ].map(child => child.key)), `DESIGN_TEXT_REVISION_LAYER_CONFLICT:${def.key}`);
+      }
+    }
+    for (const [key, style] of ctx.styles) ensure(entry(ctx, 'style', key)?.digest === designSignature(styleSnapshot(style)),
+      `DESIGN_STYLE_USER_EDIT_CONFLICT:${key}`);
+    for (const [key, variable] of ctx.variables) ensure(entry(ctx, 'variable', key)?.digest === designSignature(variableSnapshot(variable)),
+      `DESIGN_VARIABLE_USER_EDIT_CONFLICT:${key}`);
+    if (ctx.collection) ensure(entry(ctx, 'collection', 'colors')?.digest === designSignature(collectionSnapshot(ctx.collection)),
+      'DESIGN_COLLECTION_USER_EDIT_CONFLICT');
+    checkFlowOwnership(ctx);
+  }
+  async function textRevision(message) {
+    const payload = message.payload ?? {}, applying = message.command === 'scope_design_text_apply';
+    ensure(payload.reconcile === undefined || typeof payload.reconcile === 'boolean', 'DESIGN_TEXT_REVISION_RECONCILE_INVALID');
+    ensure(!payload.reconcile || applying, 'DESIGN_TEXT_REVISION_RECONCILE_REQUIRES_APPLY');
+    const revision = textRevisionSpecs(payload);
+    const scope = await guards.resolveScope(message.trustedScope);
+    guards.assertTrustedOwnership(message.trustedOwnership, message.operationId);
+    const ns = designSignature({ workspace: message.trustedOwnership.workspaceId, task: message.trustedOwnership.taskId, spec: revision.base.id }).slice(0, 24);
+    const state = readJson(scope.root, `${PREFIX}${ns}-ledger`);
+    ensure(state?.complete === true && state.finalized === true, 'DESIGN_TEXT_REVISION_BASE_NOT_COMPLETE');
+    ensure([revision.baseSignature, revision.targetSignature].includes(state.specSignature), 'DESIGN_TEXT_REVISION_BASE_SIGNATURE_CONFLICT');
+    const effective = state.specSignature === revision.targetSignature ? revision.target : revision.base;
+    const ctx = await context({ ...message, payload: { ...payload, spec: effective } });
+    let journal = ctx.state.textRevision;
+    ensure(!ctx.state.pending || ctx.state.pending.kind === 'text-revision' && journal &&
+      ctx.state.pending.runId === payload.runId, 'DESIGN_TEXT_REVISION_BASE_PENDING');
+    let predecessor = null;
+    if (journal && journal.runId !== payload.runId) {
+      ensure(journal.status === 'COMPLETE' && !ctx.state.pending && ctx.signature === revision.baseSignature &&
+        journal.targetSignature === revision.baseSignature, 'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+      predecessor = journal; journal = null;
+    }
+    ensure(journal || ctx.signature === revision.baseSignature, 'DESIGN_TEXT_REVISION_JOURNAL_REQUIRED');
+    if (journal) ensure(journal.runId === payload.runId && journal.baseSignature === revision.baseSignature &&
+      journal.targetSignature === revision.targetSignature, 'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+    await fonts(ctx, applying); await readResources(ctx);
+    // Native font/resource calls yield. Re-read every mapping, ownership and
+    // snapshot after them; no pre-await proof authorizes a later text setter.
+    ensure(canonical(readJson(ctx.scope.root, ctx.ledgerKey)) === canonical(ctx.state), 'DESIGN_TEXT_REVISION_LEDGER_CONFLICT');
+    if (predecessor) completedRevisionPredecessor(ctx, revision, predecessor);
+    checkRevisionWorld(ctx, revision, journal);
+    const result = (status, extra = {}) => ({ status, runId: payload.runId, specId: revision.target.id,
+      baseSpecSignature: revision.baseSignature, specSignature: revision.targetSignature,
+      checkpoint: { ...textRevisionCheckpoint(journal), total: revision.changes.length }, changes: revision.changes.map(change => ({ key: change.key,
+        id: ctx.map.get(change.key).id, before: { name: change.before.name ?? change.before.key, characters: change.before.props.characters },
+        after: { name: change.after.name ?? change.after.key, characters: change.after.props.characters } })), ...extra });
+    if (journal?.status === 'COMPLETE') {
+      ensure(ctx.signature === revision.targetSignature && !ctx.state.pending, 'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+      const report = await audit(ctx); ensure(report.status === 'PASS', `DESIGN_TEXT_REVISION_TARGET_DRIFT:${report.errors.join(',')}`);
+      ensure(canonical(readJson(ctx.scope.root, ctx.ledgerKey)) === canonical(ctx.state), 'DESIGN_TEXT_REVISION_LEDGER_CONFLICT');
+      checkRevisionWorld(ctx, revision, journal);
+      return result(applying ? 'COMPLETE' : 'PLANNED', { writes: 0, idempotent: true, auditStatus: 'PASS' });
+    }
+    if (journal) {
+      ensure(ctx.signature === revision.baseSignature && ctx.state.pending?.kind === 'text-revision', 'DESIGN_TEXT_REVISION_JOURNAL_CONFLICT');
+      if (!applying || !payload.reconcile) return result('NEEDS_RECONCILIATION', { writes: 0, nextAction: 'text-reconcile' });
+    } else {
+      const report = await audit(ctx); ensure(report.status === 'PASS', `DESIGN_TEXT_REVISION_BASE_AUDIT_FAILED:${report.errors.join(',')}`);
+      ensure(canonical(readJson(ctx.scope.root, ctx.ledgerKey)) === canonical(ctx.state), 'DESIGN_TEXT_REVISION_LEDGER_CONFLICT');
+      const summary = predecessor ? completedRevisionPredecessor(ctx, revision, predecessor) : null;
+      checkRevisionWorld(ctx, revision, null);
+      const changes = revision.changes.map(change => textRevisionRecord(ctx, change));
+      // A retired transport may have failed before the first native journal
+      // write. Explicit reconciliation records the unchanged, fully audited
+      // baseline; it never retries or starts the requested text mutation.
+      if (payload.reconcile) return result('RECONCILED_UNCHANGED', { writes: 0, baselineAuditStatus: 'PASS',
+        revisionState: 'NOT_STARTED', nextAction: 'text-apply' });
+      if (!applying) return result('PLANNED', { writes: 0 });
+      journal = { version: 1, runId: payload.runId, baseSignature: revision.baseSignature, targetSignature: revision.targetSignature,
+        status: 'IN_PROGRESS', cursor: 0, pending: null, receipts: [], mappingSignature: revisionMappingSignature(ctx),
+        childrenSignature: revisionChildrenSignature(ctx), flowSignature: revisionFlowSignature(ctx),
+        ...(summary ? { predecessor: summary, predecessorSignature: designSignature(summary) } : {}),
+        changes };
+      ctx.state.textRevision = journal;
+      ctx.state.pending = { kind: 'text-revision', runId: payload.runId, operationId: message.operationId, startedAt: new Date().toISOString() };
+    }
+    try {
+      save(ctx);
+      while (journal.cursor < journal.changes.length) {
+        checkRevisionWorld(ctx, revision, journal);
+        const i = journal.cursor, change = revision.changes[i], record = journal.changes[i], node = ctx.map.get(change.key);
+        if (!journal.pending) { journal.pending = { key: change.key, index: i, stage: 0 }; save(ctx); }
+        let stage = revisionStage(ctx, change, record, [journal.pending.stage, journal.pending.stage + 1]);
+        for (; stage < 4; stage++) {
+          // The durable stage permits exactly its before/after tuple if a
+          // synchronous native setter or metadata write reports an unknown outcome.
+          journal.pending.stage = stage; save(ctx);
+          revisionStage(ctx, change, record, [stage]);
+          if (stage === 0 && node.name !== (change.after.name ?? change.after.key)) { write(); node.name = change.after.name ?? change.after.key; }
+          if (stage === 1 && node.characters !== change.after.props.characters) { write(); node.characters = change.after.props.characters; }
+          if (stage === 2) put(node, NODE_INTENT, record.targetIntent);
+          if (stage === 3) put(node, NODE_DIGEST, record.snapshots[2]);
+          revisionStage(ctx, change, record, [stage + 1]);
+        }
+        journal.receipts.push({ key: change.key, id: node.id, snapshotSignature: record.snapshots[2],
+          operationId: message.operationId, observedAt: new Date().toISOString() });
+        journal.cursor += 1; journal.pending = null; save(ctx);
+      }
+      checkRevisionWorld(ctx, revision, journal);
+      const committed = { ...ctx, spec: revision.target, signature: revision.targetSignature, order: orderDesignNodes(revision.target),
+        definitions: new Map(revision.target.nodes.map(def => [def.key, def])), state: copy(ctx.state) };
+      committed.state.textRevision.status = 'COMPLETE'; committed.state.pending = null;
+      committed.state.specSignature = revision.targetSignature;
+      const prospective = await audit(committed);
+      ensure(prospective.status === 'PASS', `DESIGN_TEXT_REVISION_TARGET_AUDIT_FAILED:${prospective.errors.join(',')}`);
+      ensure(canonical(readJson(ctx.scope.root, ctx.ledgerKey)) === canonical(ctx.state), 'DESIGN_TEXT_REVISION_LEDGER_CONFLICT');
+      checkRevisionWorld(ctx, revision, journal); save(committed);
+      const report = await audit(committed);
+      ensure(report.status === 'PASS', `DESIGN_TEXT_REVISION_TARGET_AUDIT_FAILED:${report.errors.join(',')}`);
+      ensure(canonical(readJson(ctx.scope.root, ctx.ledgerKey)) === canonical(committed.state), 'DESIGN_TEXT_REVISION_LEDGER_CONFLICT');
+      journal = committed.state.textRevision;
+      checkRevisionWorld(committed, revision, journal);
+      return result('COMPLETE', { auditStatus: 'PASS', nextAction: 'audit' });
+    } catch (error) {
+      // Read the durable journal rather than reporting an in-memory cursor
+      // whose metadata setter may have failed before or after persistence.
+      const durable = readJson(ctx.scope.root, ctx.ledgerKey)?.textRevision;
+      // A failed first handoff save can leave the previous COMPLETE journal.
+      // Its cursor is not a checkpoint for this new run or its different diff.
+      journal = durable?.runId === payload.runId && durable.baseSignature === revision.baseSignature &&
+        durable.targetSignature === revision.targetSignature ? durable : null;
+      return result('PARTIAL_FAILURE', { error: String(error.message).slice(0, 500), nextAction: 'text-plan',
+        replay: 'PROHIBITED_UNTIL_READBACK_RECONCILIATION' });
+    }
+  }
   // Recovery is deliberately narrower than generation: only a bounded set of
   // generated FRAME positions, before finalization, may return to its recorded
   // intent. Digests and node IDs remain the original evidence throughout.
@@ -1371,6 +1663,7 @@ export function createDesignRuntime(figma, guards) {
   async function execute(message) {
     ensure(!busy, 'DESIGN_RUNTIME_BUSY'); busy = true;
     try {
+      if (['scope_design_text_plan', 'scope_design_text_apply'].includes(message.command)) return await textRevision(message);
       const ctx = await context(message);
       if (['scope_design_assets_plan', 'scope_design_asset_stage', 'scope_design_asset_commit'].includes(message.command)) {
         ensure(ctx.spec.schemaVersion === '1.1', 'DESIGN_ASSET_VERSION_REQUIRED'); transferContext = ctx;

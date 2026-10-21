@@ -717,7 +717,7 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
             action: ACTION_BY_COMMAND[command], revision: payload.revision,
           });
           trustedScope = authorization.scope;
-          if (command === "scope_design_apply" && checkedDesignPayload?.allowGlobalResources &&
+          if (["scope_design_apply", "scope_design_text_apply"].includes(command) && checkedDesignPayload?.allowGlobalResources &&
               !authorization.allowedActions.includes("metadata_write")) {
             throw new Error("GLOBAL_RESOURCES_NOT_AUTHORIZED");
           }

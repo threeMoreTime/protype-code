@@ -145,10 +145,12 @@ export async function createMcpServer({ port = configuredPort(), stderr = proces
       });
       continue;
     }
+    const textRevision = command === 'scope_design_text_plan' || command === 'scope_design_text_apply';
     server.registerTool(`figma_${command}`, {
       description: `Scoped DesignSpec ${command.replace('scope_design_', '')}. Requires pairing, file allowlist, local authorization and a fresh operation ID. Never executes arbitrary JavaScript.`,
       inputSchema: z.object({
         ...WRITE_INPUT_SCHEMA, spec: z.record(z.unknown()), runId: z.string(),
+        ...(textRevision ? { baseSpec: z.record(z.unknown()) } : {}),
         ...(['scope_design_plan', 'scope_design_apply'].includes(command) ? { positionRecovery: z.object({
           nodeKeys: z.array(z.string()).min(1).max(20),
           planSignature: z.string().regex(/^[a-f0-9]{64}$/).optional(),
@@ -156,11 +158,11 @@ export async function createMcpServer({ port = configuredPort(), stderr = proces
         batchSize: z.number().int().min(1).max(500).optional(),
         timerUnit: z.enum(['seconds', 'milliseconds']).optional(),
         allowGlobalResources: z.boolean().optional(), reconcile: z.boolean().optional(),
-        adoptNativeFlow: z.object({
+        ...(!textRevision ? { adoptNativeFlow: z.object({
           pendingOperationId: z.string().regex(/^op-[A-Za-z0-9._-]{8,100}$/),
           flowSnapshotSignature: z.string().regex(/^[a-f0-9]{64}$/),
           reactionSnapshotSignature: z.string().regex(/^[a-f0-9]{64}$/),
-        }).strict().optional(),
+        }).strict().optional() } : {}),
         nodeKey: z.string().optional(), scale: z.number().min(1).max(4).optional(),
         auditOffset: z.number().int().min(0).max(25000).optional(),
         auditLimit: z.number().int().min(1).max(2000).optional(),

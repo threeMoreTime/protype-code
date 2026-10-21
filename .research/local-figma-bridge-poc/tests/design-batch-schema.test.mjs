@@ -26,7 +26,7 @@ test('registered DesignSpec tools publish the bounded 500 batch and reject large
   const tools = allTools.filter(tool => !resourceNames.includes(tool.name));
   assert.deepEqual(tools.map(tool => tool.name).sort(), [
     'figma_scope_design_plan', 'figma_scope_design_apply', 'figma_scope_design_audit',
-    'figma_scope_design_export_png',
+    'figma_scope_design_export_png', 'figma_scope_design_text_plan', 'figma_scope_design_text_apply',
   ].sort());
   for (const tool of tools) {
     assert.equal(tool.inputSchema.properties.batchSize.type, 'integer', tool.name);
