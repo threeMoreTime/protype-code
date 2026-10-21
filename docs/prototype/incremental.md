@@ -53,7 +53,7 @@ npm run prototype -- --input requirements-v2.md --id my-project --base prototype
 
 ## 1.0 生成阶段的位置恢复
 
-位置恢复通过既有 plan/apply 的可选 positionRecovery 参数执行，不新增工具或改变 DesignSpec 1.0。仅适用于 PAGE 根范围内、已生成但尚未开始 finalize 的连续前缀；完整 finalized 作品不进入此通道。每次选择 1–20 个已生成 FRAME，只恢复到同一 spec 记录的父级和 x/y，保留节点 ID、原始 intent/digest 与生成进度。
+位置恢复通过既有 plan/apply 的可选 positionRecovery 参数执行，不新增工具或改变 DesignSpec 1.0。传输层和原生入口均仅接受 schemaVersion 为 1.0 的位置恢复；即使共享校验器支持 1.1，带 positionRecovery 的 1.1 请求仍以 DESIGN_POSITION_RECOVERY_VERSION_UNSUPPORTED 拒绝，不进入恢复写入。仅适用于 PAGE 根范围内、已生成但尚未开始 finalize 的连续前缀；完整 finalized 作品不进入此通道。每次选择 1–20 个已生成 FRAME，只恢复到同一 spec 记录的父级和 x/y，保留节点 ID、原始 intent/digest 与生成进度。
 
 候选及其祖先不能是 COMPONENT/INSTANCE，选中的 FRAME 不能互为祖先；相关节点须保持单位平移、无旋转/斜切和自动布局。其他内容、样式、资源、图层顺序、reaction、flow、作用域或用户编辑存在变化时停止，不通过覆盖原始摘要放行。
 

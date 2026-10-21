@@ -63,6 +63,12 @@ export function validateSessionRequest(request) {
     throw new Error('SESSION_POSITION_RECOVERY_REQUIRES_SINGLE_PLAN_OR_RECONCILE');
   }
 }
+const designCommands = {
+  plan: 'scope_design_plan', apply: 'scope_design_apply', audit: 'scope_design_audit',
+  reconcile: 'scope_design_apply', export: 'scope_design_export_png',
+  'assets-plan': 'scope_design_assets_plan', 'asset-stage': 'scope_design_asset_stage', 'asset-commit': 'scope_design_asset_commit',
+};
+const assetSessionCommands = new Set(['assets-plan', 'asset-stage', 'asset-commit']);
 const readEvidenceSchema = z.object({
   fields: z.array(z.enum(['geometry', 'vectorPaths', 'text', 'paints', 'mask', 'layout', 'component', 'children']))
     .min(1).max(8).refine(fields => new Set(fields).size === fields.length),
@@ -81,6 +87,17 @@ const canonicalReceiptJSON = value => Array.isArray(value) ? `[${value.map(canon
   : value && typeof value === 'object' ? `{${Object.keys(value).filter(key => value[key] !== undefined).sort()
     .map(key => `${JSON.stringify(key)}:${canonicalReceiptJSON(value[key])}`).join(',')}}` : JSON.stringify(value);
 const receiptSignature = value => createHash('sha256').update(canonicalReceiptJSON(value)).digest('hex');
+export function assetTransferPlanState(prior, result, config, spec, grant) {
+  const expected = receiptSignature({ specSignature: receiptSignature(spec), runId: config.runId, scope: grant.scope,
+    ownership: { workspaceId: WORKSPACE_ID, taskId: TASK_ID, revision: grant.revision } });
+  const keys = (spec.assets ?? []).filter(asset => !Object.hasOwn(asset, 'dataBase64')).map(asset => asset.key);
+  if (result?.bindingHash !== expected || result.writes !== 0 || !Array.isArray(result.assets) || result.assets.length !== keys.length ||
+      new Set(result.assets.map(asset => asset.key)).size !== keys.length || !result.assets.every(asset => keys.includes(asset.key) &&
+        ['NOT_STAGED', 'INCOMPLETE', 'STAGED', 'COMMITTED', 'OUTCOME_UNKNOWN'].includes(asset.status))) throw new Error('ASSET_TRANSFER_PLAN_RECEIPT_INVALID');
+  const assets = { ...prior?.assets };
+  for (const asset of result.assets) assets[asset.key] = { ...assets[asset.key], status: asset.status, readBackAt: new Date().toISOString() };
+  return { ...prior, assets };
+}
 export function validatePositionRecoveryReceipt(request, result, config, spec, plan) {
   if (!Object.hasOwn(request, 'positionRecovery')) return;
   const invalid = () => { throw new Error('POSITION_RECOVERY_RECEIPT_INVALID'); };
@@ -150,7 +167,16 @@ export async function loadPositionRecoveryPlan(request, config, spec) {
 export function designSessionArgs(config, request, spec, grant, operationId = `op-${randomUUID()}`) {
   validateSessionRequest(request);
   const command = request.command;
-  if (!['plan', 'apply', 'audit', 'reconcile', 'export'].includes(command)) throw new Error('UNKNOWN_SESSION_COMMAND');
+  if (!Object.hasOwn(designCommands, command)) throw new Error('UNKNOWN_SESSION_COMMAND');
+  if (assetSessionCommands.has(command)) {
+    const fields = command === 'asset-stage' ? ['assetKey', 'offset', 'dataBase64', 'chunkSha256'] : command === 'asset-commit' ? ['assetKey'] : [];
+    for (const key of Object.keys(request)) if (!['command', 'batches', ...fields].includes(key)) throw new Error('SESSION_ASSET_FIELDS_INVALID');
+    const args = { expectedFileIdentity: config.fileIdentity, workspaceId: WORKSPACE_ID, taskId: TASK_ID,
+      authorizationId: grant.authorizationId, revision: grant.revision, operationId, spec, runId: config.runId,
+      ...Object.fromEntries(fields.map(field => [field, request[field]])) };
+    designPayload(designCommands[command], args);
+    return args;
+  }
   const args = { expectedFileIdentity: config.fileIdentity, workspaceId: WORKSPACE_ID, taskId: TASK_ID,
     authorizationId: grant.authorizationId, revision: grant.revision, operationId,
     spec, runId: config.runId, batchSize: config.batchSize ?? 100,
@@ -160,7 +186,7 @@ export function designSessionArgs(config, request, spec, grant, operationId = `o
     ...(Object.hasOwn(request, 'adoptNativeFlow') ? { adoptNativeFlow: request.adoptNativeFlow } : {}),
     ...(Object.hasOwn(request, 'positionRecovery') ? { positionRecovery: request.positionRecovery } : {}),
     ...(command === 'export' ? { nodeKey: request.nodeKey, scale: request.scale ?? 1 } : {}) };
-  designPayload(`scope_design_${command === 'reconcile' ? 'apply' : command === 'export' ? 'export_png' : command}`, args);
+  designPayload(designCommands[command], args);
   return args;
 }
 
@@ -186,7 +212,7 @@ export async function session(configFile) {
       image: result.content.find(item => item.type === 'image') };
   }
   await start();
-  output({ event: 'ready', commands: ['status', 'document', 'read-node', 'pair', 'restart', 'plan', 'apply', 'audit', 'reconcile', 'export', 'operation', 'quit'] });
+  output({ event: 'ready', commands: ['status', 'document', 'read-node', 'pair', 'restart', 'plan', 'apply', 'audit', 'reconcile', 'assets-plan', 'asset-stage', 'asset-commit', 'export', 'operation', 'quit'] });
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   try {
     for await (const line of lines) {
@@ -207,7 +233,7 @@ export async function session(configFile) {
         if (simple[command]) {
           output((await call(simple[command], command === 'operation' ? { operationId: request.operationId } : {})).value); continue;
         }
-        if (!['plan', 'apply', 'audit', 'reconcile', 'export'].includes(command)) throw new Error('UNKNOWN_SESSION_COMMAND');
+        if (!Object.hasOwn(designCommands, command)) throw new Error('UNKNOWN_SESSION_COMMAND');
         const batches = request.batches ?? 1;
         if (!Number.isInteger(batches) || batches < 1 || batches > 500 || command !== 'apply' && batches !== 1) throw new Error('SESSION_BATCH_COUNT_INVALID');
         for (let batch = 0; batch < batches; batch++) {
@@ -215,19 +241,24 @@ export async function session(configFile) {
         const spec = validateDesignSpec(await json(config.specPath));
         const grant = await json(config.grantPath);
         if (grant.fileIdentity !== config.fileIdentity || grant.workspaceId !== WORKSPACE_ID || grant.taskId !== TASK_ID) throw new Error('GRANT_CONFIG_MISMATCH');
-        const commandName = `scope_design_${command === 'reconcile' ? 'apply' : command === 'export' ? 'export_png' : command}`;
+        const commandName = designCommands[command];
+        const assetCommand = assetSessionCommands.has(command);
+        const mutation = ['scope_design_apply', 'scope_design_asset_stage', 'scope_design_asset_commit'].includes(commandName);
         const args = designSessionArgs(config, request, spec, grant);
         const recoveryPlan = await loadPositionRecoveryPlan(request, config, spec);
-        const statePath = path.join(config.outDir, `${config.runId}.state.json`);
+        const statePath = path.join(config.outDir, `${config.runId}${assetCommand ? '.assets' : ''}.state.json`);
         let prior = null;
         try { prior = await json(statePath); } catch (error) { if (error.code !== 'ENOENT') throw error; }
         const digest = createHash('sha256').update(JSON.stringify(spec)).digest('hex');
         if (prior && (prior.specSha256 !== digest || prior.fileIdentity !== config.fileIdentity)) throw new Error('RUN_INPUT_CHANGED: use a new run ID and scope');
+        if (assetCommand && mutation && prior?.assets?.[request.assetKey]?.status === 'OUTCOME_UNKNOWN') throw new Error('ASSET_OUTCOME_UNKNOWN: assets-plan readback before another mutation');
         if (command === 'apply' && prior?.status === 'OUTCOME_UNKNOWN') throw new Error('OUTCOME_UNKNOWN: audit then reconcile explicitly before another batch');
         const state = { runId: config.runId, specId: spec.id, specSha256: digest,
           fileIdentity: config.fileIdentity, startedAt: prior?.startedAt ?? new Date().toISOString(),
           operationId: args.operationId, status: 'OUTCOME_UNKNOWN' };
-        if (commandName === 'scope_design_apply') await save(statePath, state);
+        const assetState = assetCommand ? { ...state, assets: { ...prior?.assets,
+          ...(mutation ? { [request.assetKey]: { operationId: args.operationId, status: 'OUTCOME_UNKNOWN', command } } : {}) } } : null;
+        if (mutation) await save(statePath, assetState ?? state);
         const result = await call(`figma_${commandName}`, args);
         validatePositionRecoveryReceipt(request, result.value, config, spec, recoveryPlan);
         if (command === 'audit') {
@@ -243,7 +274,12 @@ export async function session(configFile) {
             result.value.fileIdentity?.fileKey !== config.fileIdentity.slice('figma-file:'.length)) {
           throw new Error('EVIDENCE_FILE_IDENTITY_MISMATCH: missing or unexpected actual Figma file identity');
         }
-        if (commandName === 'scope_design_apply') await save(statePath, { ...state, status: result.value.status, result: result.value });
+        if (assetCommand) {
+          const next = command === 'assets-plan' ? assetTransferPlanState({ ...prior, ...state, assets: prior?.assets }, result.value, config, spec, grant)
+            : { ...assetState, status: result.value.status, assets: { ...assetState.assets,
+              [request.assetKey]: { ...assetState.assets[request.assetKey], status: result.value.status } } };
+          await save(statePath, next);
+        } else if (mutation) await save(statePath, { ...state, status: result.value.status, result: result.value });
         const reportPath = path.join(config.outDir, `${config.runId}.${command}.${args.operationId}.json`);
         await save(reportPath, { ...result.value, runId: config.runId, specId: spec.id,
           expectedFileIdentity: config.fileIdentity,

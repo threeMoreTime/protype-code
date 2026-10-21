@@ -11,6 +11,7 @@ import { PairingStore } from "../relay/pairing-store.mjs";
 import { TaskAuthorizationStore } from "../relay/task-authorization-store.mjs";
 import { MutationAudit } from "../relay/mutation-audit.mjs";
 import { DESIGN_ACTIONS, designPayload } from "../design/commands.mjs";
+import { ASSET_TRANSFER_COMMANDS, ASSET_TRANSFER_LIMITS } from "../design/asset-transfer.mjs";
 import { decodePng } from "../delivery/png.mjs";
 import { isBase64 } from "../design/base64.mjs";
 import { configuredDesignTimeout, designRequestTimeout } from "../design/request-timeout.mjs";
@@ -128,6 +129,22 @@ export async function createMcpServer({ port = configuredPort(), stderr = proces
 
   registerTool(server, bridge, "figma_status", "Read the live Figma Desktop plugin, document, page, and session status.", "status", { annotations: { readOnlyHint: true } });
   for (const command of Object.keys(DESIGN_ACTIONS)) {
+    if (ASSET_TRANSFER_COMMANDS.has(command)) {
+      server.registerTool(`figma_${command}`, {
+        description: 'Bounded scoped DesignSpec 1.1 image transfer. Uses the existing pairing, file allowlist, local read/design authorization and operation audit. Inspect assets_plan after unknown outcomes before another mutation.',
+        inputSchema: z.object({ ...WRITE_INPUT_SCHEMA, spec: z.record(z.unknown()), runId: z.string(),
+          ...(command !== 'scope_design_assets_plan' ? { assetKey: z.string().min(1).max(160) } : {}),
+          ...(command === 'scope_design_asset_stage' ? { offset: z.number().int().min(0).max(ASSET_TRANSFER_LIMITS.assetBytes),
+            dataBase64: z.string().min(4).max(Math.ceil(ASSET_TRANSFER_LIMITS.chunkBytes / 3) * 4),
+            chunkSha256: z.string().regex(/^[a-f0-9]{64}$/) } : {}),
+        }).strict(),
+        annotations: { readOnlyHint: command === 'scope_design_assets_plan', destructiveHint: false },
+      }, async args => {
+        try { designPayload(command, args); return jsonToolResult(await bridge.callPlugin(command, args, designTimeoutMs)); }
+        catch (error) { return errorToolResult(error); }
+      });
+      continue;
+    }
     server.registerTool(`figma_${command}`, {
       description: `Scoped DesignSpec ${command.replace('scope_design_', '')}. Requires pairing, file allowlist, local authorization and a fresh operation ID. Never executes arbitrary JavaScript.`,
       inputSchema: z.object({
@@ -148,7 +165,7 @@ export async function createMcpServer({ port = configuredPort(), stderr = proces
         auditOffset: z.number().int().min(0).max(25000).optional(),
         auditLimit: z.number().int().min(1).max(2000).optional(),
       }).strict(),
-      annotations: { readOnlyHint: command !== 'scope_design_apply', destructiveHint: false },
+      annotations: { readOnlyHint: DESIGN_ACTIONS[command] !== 'design', destructiveHint: false },
     }, async (args) => {
       try {
         designPayload(command, args);

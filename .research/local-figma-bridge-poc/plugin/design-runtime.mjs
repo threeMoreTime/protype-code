@@ -2,6 +2,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { validateDesignSpec, orderDesignNodes } from '../design/spec.mjs';
 import { normalizeVectorPaths, vectorPathsMatch } from './vector-paths.mjs';
+import { createAssetTransferController } from '../design/asset-transfer.mjs';
 
 // This module is bundled into code.js. It accepts data, never source code.
 const PREFIX = 'bridge-design-v1-';
@@ -43,6 +44,8 @@ const readJson = (node, key) => { const s = node.getPluginData(key); return s ? 
 const safe = value => typeof value === 'symbol' || value === undefined ? null : copy(value);
 const fontKey = font => `${font.family}\u0000${font.style}`;
 const normalizeSpacing = value => value?.unit === 'AUTO' ? { unit: 'AUTO' } : copy(value);
+const VISUAL_FIELDS = ['layoutMode', 'itemSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'primaryAxisAlignItems', 'counterAxisAlignItems', 'layoutWrap', 'layoutSizingHorizontal', 'layoutSizingVertical', 'constraints', 'isMask', 'maskType', 'rotation', 'relativeTransform'];
+const RANGE_FIELDS = ['fontName', 'fontSize', 'lineHeight', 'letterSpacing', 'fills'];
 function matchesExpected(actual, expected) {
   if (typeof expected === 'number') return typeof actual === 'number' && Number.isFinite(actual) && Math.abs(actual - expected) <= 0.001;
   if (Array.isArray(expected)) return Array.isArray(actual) && actual.length === expected.length && expected.every((v, i) => matchesExpected(actual[i], v));
@@ -75,8 +78,26 @@ function encodeBase64(bytes) {
 
 export function createDesignRuntime(figma, guards) {
   let busy = false;
+  let transferContext;
   const write = () => guards.onMutation?.();
   const put = (node, key, value) => { write(); node.setPluginData(key, typeof value === 'string' ? value : JSON.stringify(value)); };
+  const transfer = createAssetTransferController({
+    sha256Bytes: bytes => bytesToHex(sha256(bytes)),
+    createImage: bytes => { write(); return figma.createImage(bytes); },
+    readImageBytes: async hash => await figma.getImageByHash?.(hash)?.getBytesAsync?.(),
+    readLedger: (binding, asset) => entry(transferContext, 'asset-transfer', asset.key),
+    writeLedger: (binding, asset, record) => put(transferContext.scope.root, index(transferContext, 'asset-transfer', asset.key), record),
+    verifyContext: async (binding, { mutation }) => {
+      const ctx = transferContext; ensure(ctx && binding.specSignature === ctx.signature && binding.runId === ctx.payload.runId, 'DESIGN_ASSET_CONTEXT_CHANGED');
+      const current = await guards.resolveScope(ctx.message.trustedScope);
+      ensure(current.root === ctx.scope.root && current.page === ctx.scope.page, 'DESIGN_ASSET_SCOPE_CHANGED');
+      guards.assertTrustedOwnership(ctx.ownership, ctx.message.operationId); guards.assertInScope(ctx.scope.root, ctx.scope);
+      if (mutation && ctx.scope.root.type !== 'PAGE') guards.assertTaskOwned(ctx.scope.root, ctx.ownership);
+    },
+  });
+  const transferRequest = ctx => ({ binding: { specSignature: ctx.signature, runId: ctx.payload.runId,
+    scope: { fileIdentity: ctx.message.trustedScope.fileIdentity, pageId: ctx.message.trustedScope.pageId, rootNodeId: ctx.message.trustedScope.rootNodeId },
+    ownership: { workspaceId: ctx.ownership.workspaceId, taskId: ctx.ownership.taskId, revision: ctx.ownership.revision } }, assets: ctx.spec.assets ?? [] });
   async function context(message) {
     const scope = await guards.resolveScope(message.trustedScope);
     guards.assertTrustedOwnership(message.trustedOwnership, message.operationId);
@@ -101,6 +122,8 @@ export function createDesignRuntime(figma, guards) {
       resourceKeys: { styles: new Map(), variables: new Map(), images: new Map() }, preparedComponents: new Set() };
     ctx.order = orderDesignNodes(spec);
     ctx.definitions = new Map(ctx.order.map(def => [def.key, def]));
+    ctx.componentSets = new Map((spec.componentSets ?? []).map(group => [group.key, group]));
+    ctx.memberSets = new Map((spec.componentSets ?? []).flatMap(group => group.memberKeys.map(key => [key, group.key])));
     ctx.children = new Map(); ctx.reactionDefs = new Map();
     for (const def of spec.nodes) {
       if (!ctx.children.has(def.parentKey)) ctx.children.set(def.parentKey, []);
@@ -170,7 +193,7 @@ export function createDesignRuntime(figma, guards) {
     // image hashes. These indexes are rebuilt for every fresh operation.
     if (!ctx.resourceKeys[kind].has(id)) ctx.resourceKeys[kind].set(id, key);
   }
-  function collectRawSnapshot(node, inherited = false) {
+  function collectRawSnapshot(node, inherited = false, visual = false) {
     const result = { type: node.type, name: node.name, parentKey: node.parent?.getPluginData?.(guards.specNodeKey) ?? '' };
     for (const field of ['x', 'y', 'width', 'height', 'visible', 'opacity', 'fills', 'strokes', 'strokeWeight', 'cornerRadius',
       'clipsContent', 'overflowDirection', 'numberOfFixedChildren', 'layoutPositioning', 'characters', 'fontName', 'fontSize',
@@ -178,12 +201,28 @@ export function createDesignRuntime(figma, guards) {
       if (field in node) result[field] = safe(node[field]);
     }
     if ('textStyleId' in node) result.textStyleId = node.textStyleId;
+    if (visual && node.type === 'COMPONENT_SET') result.memberKeys = node.children.map(child => child.getPluginData(guards.specNodeKey) ?? '');
+    if (visual && (inherited || node.type === 'INSTANCE')) result.inheritedReactions = normalizedReactions(node);
+    if (visual) {
+      for (const field of VISUAL_FIELDS) if (field in node) result[field] = safe(node[field]);
+      if (node.type === 'TEXT') {
+        ensure(typeof node.getStyledTextSegments === 'function', 'DESIGN_TEXT_RANGE_READ_UNSUPPORTED');
+        result.textRanges = safe(node.getStyledTextSegments(RANGE_FIELDS));
+      }
+      result.layoutDriven = { position: ['HORIZONTAL', 'VERTICAL'].includes(node.parent?.layoutMode) && node.layoutPositioning !== 'ABSOLUTE',
+        width: ['HUG', 'FILL'].includes(node.layoutSizingHorizontal), height: ['HUG', 'FILL'].includes(node.layoutSizingVertical) };
+    }
     if (inherited) result.sourceKey = node.getPluginData(NODE_SOURCE);
-    if ((node.type === 'INSTANCE' || inherited) && 'children' in node) result.instanceChildren = node.children.map(child => collectRawSnapshot(child, true));
+    if ((node.type === 'INSTANCE' || inherited) && 'children' in node) result.instanceChildren = node.children.map(child => collectRawSnapshot(child, true, visual));
     return result;
   }
   function semanticSnapshot(ctx, raw) {
     const result = { ...raw };
+    if (raw.layoutDriven) {
+      if (raw.layoutDriven.position) { result.x = 0; result.y = 0; if (result.relativeTransform) { result.relativeTransform = copy(result.relativeTransform); result.relativeTransform[0][2] = 0; result.relativeTransform[1][2] = 0; } }
+      if (raw.layoutDriven.width) result.width = 0;
+      if (raw.layoutDriven.height) result.height = 0;
+    }
     for (const field of ['fills', 'strokes']) if (Array.isArray(result[field])) result[field] = result[field].map(p => {
       const paint = copy(p);
       if (paint.boundVariables?.color?.id) {
@@ -198,17 +237,21 @@ export function createDesignRuntime(figma, guards) {
       result.textStyleKey = raw.textStyleId ? ctx.resourceKeys.styles.get(raw.textStyleId) ?? 'UNKNOWN' : null;
       delete result.textStyleId;
     }
+    if (raw.textRanges) result.textRanges = raw.textRanges.map(range => ({ ...range,
+      ...(Array.isArray(range.fills) ? { fills: semanticSnapshot(ctx, { fills: range.fills }).fills } : {}) }));
     if (raw.instanceChildren) result.instanceChildren = raw.instanceChildren.map(child => semanticSnapshot(ctx, child));
+    if (raw.inheritedReactions) result.inheritedReactions = semanticReactions(ctx, { reactions: raw.inheritedReactions });
     return result;
   }
-  const snapshot = (ctx, node, inherited = false) => semanticSnapshot(ctx, collectRawSnapshot(node, inherited));
-  function checkNode(ctx, def, node) {
+  const snapshot = (ctx, node, inherited = false) => semanticSnapshot(ctx, collectRawSnapshot(node, inherited, ctx.spec.schemaVersion === '1.1'));
+  function checkNode(ctx, def, node, reactionBefore) {
     guards.assertInScope(node, ctx.scope);
     guards.assertTaskOwned(node, ctx.ownership);
     ensure(node.getPluginData(NODE_INTENT) === designSignature(def), `DESIGN_INTENT_CONFLICT:${def.key}`);
     const expected = node.getPluginData(NODE_DIGEST);
-    const raw = collectRawSnapshot(node);
-    if (expected) ensure(expected === designSignature(semanticSnapshot(ctx, raw)), `DESIGN_USER_EDIT_CONFLICT:${def.key}`);
+    const raw = collectRawSnapshot(node, false, ctx.spec.schemaVersion === '1.1');
+    const guarded = reactionBefore && Object.hasOwn(raw, 'inheritedReactions') ? { ...raw, inheritedReactions: reactionBefore.inheritedReactions } : raw;
+    if (expected) ensure(expected === designSignature(semanticSnapshot(ctx, guarded)), `DESIGN_USER_EDIT_CONFLICT:${def.key}`);
     if ('children' in node && node.type !== 'INSTANCE') {
       for (const child of node.children) {
         guards.assertTaskOwned(child, ctx.ownership);
@@ -227,7 +270,18 @@ export function createDesignRuntime(figma, guards) {
       checkReadback(ctx, def, node, raw);
     }
   }
-  function checkReadback(ctx, def, node, raw) {
+  function stagingDefinition(ctx, def) {
+    const groupKey = ctx.memberSets.get(def.key);
+    if (!groupKey || ctx.map.has(groupKey)) return def;
+    const group = ctx.definitions.get(groupKey), result = { ...def, x: def.x + group.x, y: def.y + group.y };
+    if (def.props?.relativeTransform) {
+      result.props = { ...def.props, relativeTransform: copy(def.props.relativeTransform) };
+      result.props.relativeTransform[0][2] += group.x; result.props.relativeTransform[1][2] += group.y;
+    }
+    return result;
+  }
+  function checkReadback(ctx, original, node, raw) {
+    const def = stagingDefinition(ctx, original);
     const actual = raw ?? node;
     const p = def.props ?? {}, expected = { name: def.name ?? def.key, x: def.x, y: def.y };
     if (def.type !== 'TEXT' || !p.textAutoResize || p.textAutoResize === 'NONE') Object.assign(expected, { width: def.width, height: def.height });
@@ -237,10 +291,20 @@ export function createDesignRuntime(figma, guards) {
     if (p.effects) expected.effects = p.effects.map(effect => ({ ...effect, blendMode: 'NORMAL', visible: effect.visible ?? true, spread: effect.spread ?? 0 }));
     if (p.fills) expected.fills = paints(ctx, p.fills);
     if (p.strokes) expected.strokes = paints(ctx, p.strokes);
+    if (ctx.spec.schemaVersion === '1.1') {
+      for (const field of VISUAL_FIELDS) if (p[field] !== undefined) expected[field] = p[field];
+      if (['HORIZONTAL', 'VERTICAL'].includes(node.parent?.layoutMode) && p.layoutPositioning !== 'ABSOLUTE') { delete expected.x; delete expected.y; if (expected.relativeTransform) { expected.relativeTransform = copy(expected.relativeTransform); expected.relativeTransform[0][2] = actual.relativeTransform?.[0]?.[2]; expected.relativeTransform[1][2] = actual.relativeTransform?.[1]?.[2]; } }
+      if (['HUG', 'FILL'].includes(p.layoutSizingHorizontal)) delete expected.width;
+      if (['HUG', 'FILL'].includes(p.layoutSizingVertical)) delete expected.height;
+    }
     if (def.type === 'TEXT') {
       const requested = p.fontName ?? ctx.spec.textStyles.find(style => style.key === p.textStyleKey).fontName;
       expected.fontName = ctx.fonts.get(fontKey(requested));
       if (p.textStyleKey) expected.textStyleId = ctx.styles.get(p.textStyleKey)?.id;
+      if (p.textRanges) {
+        for (const field of RANGE_FIELDS) if (p.textRanges.some(range => range[field] !== undefined)) delete expected[field];
+        checkTextRanges(ctx, node, p.textRanges, def.key);
+      }
     }
     for (const [field, value] of Object.entries(expected)) {
       const matched = field === 'vectorPaths' ? vectorPathsMatch(actual[field], value) : matchesExpected(actual[field], value);
@@ -264,12 +328,19 @@ export function createDesignRuntime(figma, guards) {
       }
       for (const override of p.overrides) {
         const child = inherited.get(override.sourceKey); ensure(child, `DESIGN_OVERRIDE_SOURCE_MISSING:${override.sourceKey}`);
-        for (const field of ['characters', 'visible', 'fills']) if (override[field] !== undefined) ensure(matchesExpected(child[field], field === 'fills' ? paints(ctx, override.fills) : override[field]), `DESIGN_OVERRIDE_READBACK_MISMATCH:${def.key}:${override.sourceKey}:${field}`);
+        for (const field of Object.keys(override).filter(field => !['sourceKey', 'textRanges'].includes(field) && !override.textRanges?.some(range => range[field] !== undefined))) if (override[field] !== undefined) ensure(matchesExpected(child[field], ['fills', 'strokes'].includes(field) ? paints(ctx, override[field]) : field === 'fontName' ? ctx.fonts.get(fontKey(override.fontName)) : override[field]), `DESIGN_OVERRIDE_READBACK_MISMATCH:${def.key}:${override.sourceKey}:${field}`);
+        if (override.textRanges) {
+          // Range getters live on native nodes; the raw recursive snapshot is
+          // separately digested, while this check uses the inherited instance.
+          const live = [...node.children]; let target;
+          for (let i = 0; i < live.length; i++) { if (live[i].getPluginData(NODE_SOURCE) === override.sourceKey) target = live[i]; if (live[i].children) live.push(...live[i].children); }
+          ensure(target, `DESIGN_OVERRIDE_SOURCE_MISSING:${override.sourceKey}`); checkTextRanges(ctx, target, override.textRanges, def.key);
+        }
       }
     }
   }
   async function fonts(ctx, load) {
-    const requested = [...(ctx.spec.textStyles ?? []).map(x => x.fontName), ...ctx.spec.nodes.filter(n => n.type === 'TEXT' && n.props.fontName).map(n => n.props.fontName)];
+    const requested = [...(ctx.spec.textStyles ?? []).map(x => x.fontName), ...ctx.spec.nodes.filter(n => n.type === 'TEXT' && n.props.fontName).map(n => n.props.fontName), ...ctx.spec.nodes.flatMap(n => [...n.props?.textRanges ?? [], ...(n.props?.overrides ?? []).flatMap(o => [o.fontName ? { fontName: o.fontName } : null, ...o.textRanges ?? []].filter(Boolean))].map(r => r.fontName))];
     const available = typeof figma.listAvailableFontsAsync === 'function' ? new Set((await figma.listAvailableFontsAsync()).map(x => fontKey(x.fontName))) : null;
     for (const requestedFont of requested) {
       const key = fontKey(requestedFont);
@@ -293,8 +364,21 @@ export function createDesignRuntime(figma, guards) {
     }
   }
   async function readResources(ctx) {
+    let staged;
+    if ((ctx.spec.assets ?? []).some(asset => !asset.dataBase64)) {
+      transferContext = ctx;
+      staged = new Map((await transfer.plan(transferRequest(ctx))).assets.map(asset => [asset.key, asset]));
+    }
     for (const asset of ctx.spec.assets ?? []) {
-      const r = entry(ctx, 'image', asset.key);
+      let r = entry(ctx, 'image', asset.key);
+      if (!asset.dataBase64) {
+        const receipt = entry(ctx, 'asset-transfer', asset.key);
+        if (!r && receipt?.status === 'COMMITTED') r = { hash: receipt.imageHash, signature: designSignature(asset) };
+        if (r) {
+          ensure(receipt?.status === 'COMMITTED' && receipt.sha256 === asset.sha256 && receipt.imageHash === r.hash && receipt.decodedBytes === asset.decodedBytes, `DESIGN_ASSET_CONFLICT:${asset.key}`);
+          ensure(staged.get(asset.key)?.status === 'COMMITTED' && staged.get(asset.key)?.imageHash === r.hash, `DESIGN_ASSET_READBACK_MISMATCH:${asset.key}`);
+        }
+      }
       if (r) { ensure(r.signature === designSignature(asset), `DESIGN_ASSET_CONFLICT:${asset.key}`); rememberResource(ctx, 'images', asset.key, r.hash); }
     }
     for (const def of ctx.spec.textStyles ?? []) {
@@ -325,7 +409,7 @@ export function createDesignRuntime(figma, guards) {
       if (!record) continue;
       let variable = await figma.variables.getVariableByIdAsync(record.id);
       if (!variable || variable.description !== marker(ctx, 'variable', def.key)) {
-        const matches = (await figma.variables.getLocalVariablesAsync('COLOR')).filter(v => v.description === marker(ctx, 'variable', def.key));
+        const matches = (await figma.variables.getLocalVariablesAsync(def.type ?? 'COLOR')).filter(v => v.description === marker(ctx, 'variable', def.key));
         ensure(matches.length === 1, `DESIGN_VARIABLE_MAPPING_AMBIGUOUS:${def.key}`); variable = matches[0];
       }
       ensure(variable && variable.description === marker(ctx, 'variable', def.key), `DESIGN_VARIABLE_OWNERSHIP_CONFLICT:${def.key}`);
@@ -348,6 +432,7 @@ export function createDesignRuntime(figma, guards) {
     if (globalCount) ensure(ctx.payload.allowGlobalResources === true, 'DESIGN_GLOBAL_RESOURCES_AUTH_REQUIRED');
     for (const asset of ctx.spec.assets ?? []) {
       if (ctx.images.has(asset.key)) continue;
+      ensure(typeof asset.dataBase64 === 'string', `DESIGN_ASSET_NOT_STAGED:${asset.key}`);
       step(ctx, 'image', asset.key);
       write(); const image = figma.createImage(decodeBase64(asset.dataBase64));
       rememberResource(ctx, 'images', asset.key, image.hash);
@@ -386,7 +471,7 @@ export function createDesignRuntime(figma, guards) {
       for (const def of ctx.spec.variables) {
         if (ctx.variables.has(def.key)) continue;
         step(ctx, 'variable', def.key);
-        write(); const variable = figma.variables.createVariable(`Bridge/${ctx.ns}/${def.name}`, collection, 'COLOR');
+        write(); const variable = figma.variables.createVariable(`Bridge/${ctx.ns}/${def.name}`, collection, def.type ?? 'COLOR');
         ctx.state.pending.id = variable.id; save(ctx);
         variable.description = marker(ctx, 'variable', def.key);
         variable.setValueForMode(collection.defaultModeId, copy(def.value));
@@ -398,12 +483,33 @@ export function createDesignRuntime(figma, guards) {
   }
   function paints(ctx, list) {
     return list.map(p => {
-      if (p.type === 'IMAGE') return { type: 'IMAGE', imageHash: ctx.images.get(p.assetKey), scaleMode: p.scaleMode ?? 'FILL', ...(p.opacity === undefined ? {} : { opacity: p.opacity }) };
-      if (p.type === 'GRADIENT_LINEAR') return { type: p.type, gradientTransform: copy(p.gradientTransform), gradientStops: copy(p.gradientStops), ...(p.opacity === undefined ? {} : { opacity: p.opacity }) };
+      if (p.type === 'IMAGE') return { type: 'IMAGE', imageHash: ctx.images.get(p.assetKey), scaleMode: p.scaleMode ?? 'FILL', ...(p.imageTransform ? { imageTransform: copy(p.imageTransform) } : {}), ...(p.opacity === undefined ? {} : { opacity: p.opacity }) };
+      if (p.type.startsWith('GRADIENT_')) return { type: p.type, gradientTransform: copy(p.gradientTransform), gradientStops: copy(p.gradientStops), ...(p.opacity === undefined ? {} : { opacity: p.opacity }) };
       let paint = { type: 'SOLID', color: copy(p.color), ...(p.opacity === undefined ? {} : { opacity: p.opacity }) };
       if (p.variableKey) paint = figma.variables.setBoundVariableForPaint(paint, 'color', ctx.variables.get(p.variableKey));
       return paint;
     });
+  }
+  function applyTextRanges(ctx, node, ranges) {
+    for (const range of ranges) for (const field of RANGE_FIELDS) if (range[field] !== undefined) {
+      const method = `setRange${field[0].toUpperCase()}${field.slice(1)}`;
+      ensure(typeof node[method] === 'function', `DESIGN_PROPERTY_UNSUPPORTED:${node.name}:${method}`);
+      if (field === 'fills') ensureNewNodeImages(ctx, range.fills);
+      const value = field === 'fontName' ? copy(ctx.fonts.get(fontKey(range.fontName))) : field === 'fills' ? paints(ctx, range.fills) : copy(range[field]);
+      const getter = `getRange${field[0].toUpperCase()}${field.slice(1)}`;
+      ensure(typeof node[getter] === 'function', `DESIGN_PROPERTY_UNSUPPORTED:${node.name}:${getter}`);
+      // A no-op typography setter can detach a linked text style in Figma.
+      if (matchesExpected(node[getter](range.start, range.end), value)) continue;
+      write(); node[method](range.start, range.end, value);
+    }
+  }
+  function checkTextRanges(ctx, node, ranges, key) {
+    for (const range of ranges) for (const field of RANGE_FIELDS) if (range[field] !== undefined) {
+      const method = `getRange${field[0].toUpperCase()}${field.slice(1)}`;
+      ensure(typeof node[method] === 'function', `DESIGN_PROPERTY_UNSUPPORTED:${key}:${method}`);
+      const wanted = field === 'fontName' ? ctx.fonts.get(fontKey(range.fontName)) : field === 'fills' ? paints(ctx, range.fills) : range[field];
+      ensure(matchesExpected(node[method](range.start, range.end), wanted), `DESIGN_TEXT_RANGE_READBACK_MISMATCH:${key}:${range.start}:${field}`);
+    }
   }
   function ensureNewNodeImages(ctx, list) {
     const checked = new Set();
@@ -416,6 +522,7 @@ export function createDesignRuntime(figma, guards) {
       ensure(record.hash === ctx.images.get(paint.assetKey), `DESIGN_IMAGE_HASH_CHANGED:${paint.assetKey}`);
       ensure(typeof figma.getImageByHash === 'function', 'DESIGN_IMAGE_API_UNAVAILABLE');
       if (figma.getImageByHash(record.hash)) continue;
+      ensure(typeof asset.dataBase64 === 'string', `DESIGN_ASSET_NOT_STAGED:${paint.assetKey}`);
       // The host can lose a previously created, unused image handle between
       // batches. Only this new node's pending mutation may recreate the exact
       // source. Never replace a ledger hash or repair existing nodes here.
@@ -428,27 +535,54 @@ export function createDesignRuntime(figma, guards) {
     if (def.type === 'INSTANCE' && !ctx.preparedComponents.has(def.props.componentKey)) {
       // Fix the complete master subtree before cloning. Later finalization must
       // not alter inherited layer order after the instance digest is recorded.
-      const queue = [ctx.spec.nodes.find(n => n.key === def.props.componentKey)];
+      const family = ctx.componentSets.get(ctx.memberSets.get(def.props.componentKey));
+      const queue = (family?.memberKeys ?? [def.props.componentKey]).map(key => ctx.definitions.get(key));
       for (let i = 0; i < queue.length; i++) queue.push(...(ctx.children.get(queue[i].key) ?? []));
-      for (const masterDef of queue.reverse()) orderChildren(ctx, masterDef);
-      ctx.preparedComponents.add(def.props.componentKey);
+      for (const masterDef of queue.reverse()) {
+        orderChildren(ctx, masterDef);
+        if (family) await finalizeReactions(ctx, masterDef, ctx.map.get(masterDef.key));
+      }
+      if (family) checkExisting(ctx);
+      for (const key of family?.memberKeys ?? [def.props.componentKey]) ctx.preparedComponents.add(key);
+    }
+    const stageDef = stagingDefinition(ctx, def), memberSet = ctx.memberSets.get(def.key);
+    const parentKey = memberSet && !ctx.map.has(memberSet) ? ctx.definitions.get(memberSet).parentKey : def.parentKey;
+    const parent = parentKey ? ctx.map.get(parentKey) : ctx.scope.root;
+    ensure(parent && ['PAGE', 'FRAME', 'COMPONENT', 'COMPONENT_SET'].includes(parent.type), 'DESIGN_PARENT_INVALID');
+    guards.assertInScope(parent, ctx.scope);
+    if (parent !== ctx.scope.root) guards.assertTaskOwned(parent, ctx.ownership);
+    const group = ctx.componentSets.get(def.key), members = group?.memberKeys.map(key => ctx.map.get(key));
+    const beforeMembers = new Map();
+    if (group) {
+      ensure(typeof figma.combineAsVariants === 'function' && members.every(member => member?.type === 'COMPONENT' && member.parent === parent), 'DESIGN_COMPONENT_SET_COMBINE_UNSUPPORTED');
+      for (const member of members) {
+        const memberDef = ctx.definitions.get(member.getPluginData(guards.specNodeKey));
+        const raw = checkNode(ctx, memberDef, member); checkReadback(ctx, memberDef, member, raw);
+        beforeMembers.set(member.id, raw);
+      }
     }
     step(ctx, 'node', def.key);
     const factory = { FRAME: 'createFrame', COMPONENT: 'createComponent', TEXT: 'createText', RECTANGLE: 'createRectangle', ELLIPSE: 'createEllipse', VECTOR: 'createVector' };
     write();
-    const node = def.type === 'INSTANCE' ? ctx.map.get(def.props.componentKey).createInstance() : figma[factory[def.type]]();
+    const node = group ? figma.combineAsVariants(members, parent) : def.type === 'INSTANCE' ? ctx.map.get(def.props.componentKey).createInstance() : figma[factory[def.type]]();
     ctx.state.pending.id = node.id; save(ctx);
     guards.markTaskOwned(node, 'design-node', ctx.ownership, ctx.message.operationId);
     put(node, guards.specNodeKey, def.key);
     put(node, NODE_SPEC, ctx.ns);
     put(node, NODE_INTENT, designSignature(def));
     put(node, NODE_STATE, 'creating');
-    const parent = def.parentKey ? ctx.map.get(def.parentKey) : ctx.scope.root;
-    ensure(parent && ['PAGE', 'FRAME', 'COMPONENT'].includes(parent.type), 'DESIGN_PARENT_INVALID');
-    guards.assertInScope(parent, ctx.scope);
-    if (parent !== ctx.scope.root) guards.assertTaskOwned(parent, ctx.ownership);
-    parent.appendChild(node);
-    const p = def.props ?? {};
+    if (!group) parent.appendChild(node);
+    else {
+      ensure(node.type === 'COMPONENT_SET' && node.parent === parent && canonical(node.children.map(child => child.id)) === canonical(members.map(member => member.id)), 'DESIGN_COMPONENT_SET_READBACK_MISMATCH');
+      for (const member of members) {
+        const before = beforeMembers.get(member.id), after = collectRawSnapshot(member, false, true);
+        ensure(matchesExpected(member.x + node.x, before.x) && matchesExpected(member.y + node.y, before.y), 'DESIGN_COMPONENT_SET_REPARENT_CONFLICT');
+        const comparable = { ...after, parentKey: before.parentKey, x: before.x, y: before.y };
+        if (comparable.relativeTransform && before.relativeTransform) { comparable.relativeTransform[0][2] = before.relativeTransform[0][2]; comparable.relativeTransform[1][2] = before.relativeTransform[1][2]; }
+        ensure(canonical(comparable) === canonical(before), 'DESIGN_COMPONENT_SET_MEMBER_CONFLICT');
+      }
+    }
+    const p = stageDef.props ?? {};
     node.name = def.name ?? def.key;
     if (def.type === 'TEXT') {
       const requested = p.fontName ?? ctx.spec.textStyles.find(x => x.key === p.textStyleKey).fontName;
@@ -485,9 +619,13 @@ export function createDesignRuntime(figma, guards) {
     if (p.effects) node.effects = p.effects.map(effect => ({ ...copy(effect), blendMode: 'NORMAL', visible: effect.visible ?? true, spread: effect.spread ?? 0 }));
     if (p.overflowDirection !== undefined) node.overflowDirection = OVERFLOW[p.overflowDirection];
     if (p.layoutPositioning !== undefined && parent.layoutMode && parent.layoutMode !== 'NONE') node.layoutPositioning = p.layoutPositioning;
-    if (typeof node.resizeWithoutConstraints === 'function') node.resizeWithoutConstraints(def.width, def.height);
-    else node.resize(def.width, def.height);
-    node.x = def.x; node.y = def.y;
+    if (typeof node.resizeWithoutConstraints === 'function') node.resizeWithoutConstraints(stageDef.width, stageDef.height);
+    else node.resize(stageDef.width, stageDef.height);
+    node.x = stageDef.x; node.y = stageDef.y;
+    if (ctx.spec.schemaVersion === '1.1') {
+      for (const field of VISUAL_FIELDS) if (p[field] !== undefined) { ensure(field in node, `DESIGN_PROPERTY_UNSUPPORTED:${def.key}:${field}`); write(); node[field] = copy(p[field]); }
+      if (p.textRanges) applyTextRanges(ctx, node, p.textRanges);
+    }
     if (def.type === 'TEXT' && p.textAutoResize && p.textAutoResize !== 'NONE') node.textAutoResize = p.textAutoResize;
     if (def.type === 'INSTANCE') {
       const source = ctx.map.get(p.componentKey);
@@ -513,10 +651,26 @@ export function createDesignRuntime(figma, guards) {
         if (override.characters !== undefined) { ensure(child.type === 'TEXT', 'DESIGN_OVERRIDE_TEXT_REQUIRED'); write(); child.characters = override.characters; }
         if (override.visible !== undefined) { write(); child.visible = override.visible; }
         if (override.fills !== undefined) { ensureNewNodeImages(ctx, override.fills); write(); child.fills = paints(ctx, override.fills); }
+        if (ctx.spec.schemaVersion === '1.1') {
+          for (const field of Object.keys(override).filter(k => !['sourceKey', 'characters', 'visible', 'fills', 'textRanges', 'width', 'height'].includes(k))) {
+            ensure(field in child, `DESIGN_PROPERTY_UNSUPPORTED:${def.key}:${field}`);
+            if (field === 'strokes') ensureNewNodeImages(ctx, override.strokes);
+            write(); child[field] = field === 'strokes' ? paints(ctx, override.strokes) : field === 'fontName' ? copy(ctx.fonts.get(fontKey(override.fontName))) : copy(override[field]);
+          }
+          if (override.width !== undefined || override.height !== undefined) { write(); child.resizeWithoutConstraints(override.width ?? child.width, override.height ?? child.height); }
+          if (override.textRanges) applyTextRanges(ctx, child, override.textRanges);
+        }
       }
     }
     ctx.map.set(def.key, node);
     ctx.idToKey.set(node.id, def.key);
+    if (group) for (const member of members) {
+      const memberDef = ctx.definitions.get(member.getPluginData(guards.specNodeKey));
+      write(); member.x = memberDef.x; member.y = memberDef.y;
+      if (memberDef.props?.relativeTransform) { write(); member.relativeTransform = copy(memberDef.props.relativeTransform); }
+      checkReadback(ctx, memberDef, member);
+      put(member, NODE_DIGEST, designSignature(snapshot(ctx, member)));
+    }
     checkReadback(ctx, def, node);
     put(node, NODE_DIGEST, designSignature(snapshot(ctx, node)));
     put(node, NODE_STATE, 'complete');
@@ -525,9 +679,12 @@ export function createDesignRuntime(figma, guards) {
     finish(ctx);
   }
   function nativeReactions(ctx, def) {
-    return (ctx.reactionDefs.get(def.key) ?? []).map(r => ({
-      trigger: r.trigger.type === 'ON_CLICK' ? { type: 'ON_CLICK' } : { type: 'AFTER_TIMEOUT', timeout: r.trigger.delaySeconds * (ctx.timerUnit === 'milliseconds' ? 1000 : 1) },
-      actions: [{ type: 'NODE', destinationId: ctx.map.get(r.destinationKey)?.id ?? 'MISSING', navigation: 'NAVIGATE', transition: null }],
+    const inherited = def.type === 'INSTANCE' && ctx.memberSets.has(def.props.componentKey);
+    const definitions = ctx.reactionDefs.get(def.key) ?? (inherited ? ctx.reactionDefs.get(def.props.componentKey) : null) ?? [];
+    return definitions.map(r => ({
+      trigger: r.trigger.type === 'AFTER_TIMEOUT' ? { type: 'AFTER_TIMEOUT', timeout: r.trigger.timeoutMs ?? r.trigger.delaySeconds * (ctx.timerUnit === 'milliseconds' ? 1000 : 1) }
+        : ['MOUSE_ENTER', 'MOUSE_LEAVE'].includes(r.trigger.type) ? { type: r.trigger.type, delay: r.trigger.delayMs, deprecatedVersion: false } : { type: r.trigger.type },
+      actions: [{ type: 'NODE', destinationId: ctx.map.get(r.destinationKey)?.id ?? 'MISSING', navigation: r.navigation ?? 'NAVIGATE', transition: null }],
     }));
   }
   const normalizedReactions = node => (node.reactions ?? []).map(r => ({ trigger: safe(r.trigger), actions: (r.actions ?? (r.action ? [r.action] : [])).map(a => a.type === 'NODE'
@@ -687,19 +844,28 @@ export function createDesignRuntime(figma, guards) {
   }
   async function setReactions(ctx, def, node, desired) {
     checkFlowOwnership(ctx);
+    const reactionBefore = checkNode(ctx, def, node);
     const before = copy(ctx.scope.page.flowStartingPoints ?? []);
     const top = reactionTopFrame(ctx, node);
+    const local = desired.length > 0 && desired.every(reaction => reaction.actions.every(action => action.type === 'NODE' && action.navigation === 'CHANGE_TO'));
     // A disconnected interaction can append a starting point even when flows
     // already exist. Require page scope before any nonempty native setter.
-    if (desired.length) ensure(ctx.scope.root.type === 'PAGE' && top, 'DESIGN_NATIVE_FLOW_REQUIRES_PAGE_SCOPE');
+    if (desired.length) ensure(ctx.scope.root.type === 'PAGE' && (top || local), 'DESIGN_NATIVE_FLOW_REQUIRES_PAGE_SCOPE');
+    if (local) {
+      let source = def; const seen = new Set();
+      while (source && !seen.has(source.key) && !['COMPONENT', 'INSTANCE'].includes(source.type)) { seen.add(source.key); source = ctx.definitions.get(source.parentKey); }
+      const sourceSet = ctx.memberSets.get(source?.type === 'INSTANCE' ? source.props.componentKey : source?.key);
+      ensure(sourceSet && ctx.map.get(sourceSet)?.type === 'COMPONENT_SET' && desired.every(reaction => reaction.actions.every(action => ctx.memberSets.get(ctx.idToKey.get(action.destinationId)) === sourceSet)), 'DESIGN_CHANGE_TO_SET_CONFLICT');
+    }
     step(ctx, 'reactions', def.key);
     ctx.state.pending.flowBefore = before.map(flow => ({ name: flow.name, nodeKey: ctx.idToKey.get(flow.nodeId) ?? null, nodeId: flow.nodeId }));
     save(ctx);
     write(); await node.setReactionsAsync(desired);
     // The batch's earlier guard cannot cover edits during this native await.
-    const raw = checkNode(ctx, def, node);
+    const raw = checkNode(ctx, def, node, reactionBefore);
     checkReadback(ctx, def, node, raw);
     ensure(canonical(normalizedReactions(node)) === canonical(desired), `DESIGN_REACTION_READBACK_MISMATCH:${def.key}`);
+    if (Object.hasOwn(raw, 'inheritedReactions')) put(node, NODE_DIGEST, designSignature(semanticSnapshot(ctx, raw)));
     const after = copy(ctx.scope.page.flowStartingPoints ?? []);
     // Preserve the successful source readback even if the subsequent page-flow
     // guard rejects. This is diagnostic evidence, not an accepted flow receipt.
@@ -709,11 +875,23 @@ export function createDesignRuntime(figma, guards) {
       operationId: ctx.message.operationId, observedAt: new Date().toISOString() };
     save(ctx);
     if (canonical(after) !== canonical(before)) {
+      ensure(!local, 'DESIGN_LOCAL_FLOW_USER_EDIT_CONFLICT');
       // Two independent six-node native probes established this exact delta.
       // Preserve every prior entry; other changes remain rejected with receipts.
       appendNativeObservation(ctx, def, node, before, after);
     }
     put(ctx.scope.root, index(ctx, 'reactions', def.key), { version: 2, digest: reactionDigest(ctx, node) }); finish(ctx);
+  }
+  async function finalizeReactions(ctx, def, node) {
+    const desired = nativeReactions(ctx, def), actual = normalizedReactions(node), previous = entry(ctx, 'reactions', def.key);
+    if (previous) ensure(previous.digest === reactionDigest(ctx, node, previous), `DESIGN_REACTION_USER_EDIT_CONFLICT:${def.key}`);
+    else ensure(actual.length === 0 || canonical(actual) === canonical(desired), `DESIGN_REACTION_CONFLICT:${def.key}`);
+    if (canonical(actual) !== canonical(desired)) {
+      // A family instance inherits its master. Do not turn an inherited native
+      // behavior into an unrelated explicit override when the host disagrees.
+      ensure(!(def.type === 'INSTANCE' && ctx.memberSets.has(def.props.componentKey) && !ctx.reactionDefs.has(def.key)), `DESIGN_INSTANCE_REACTION_INHERITANCE_MISMATCH:${def.key}`);
+      await setReactions(ctx, def, node, desired);
+    } else if (!previous) put(ctx.scope.root, index(ctx, 'reactions', def.key), { version: 2, digest: reactionDigest(ctx, node) });
   }
   function orderChildren(ctx, def) {
     const node = ctx.map.get(def.key);
@@ -747,14 +925,7 @@ export function createDesignRuntime(figma, guards) {
     for (const def of ctx.order.slice(start, start + budget)) {
       const node = ctx.map.get(def.key);
       orderChildren(ctx, def);
-      const desired = nativeReactions(ctx, def);
-      const actual = normalizedReactions(node);
-      const previous = entry(ctx, 'reactions', def.key);
-      if (previous) ensure(previous.digest === reactionDigest(ctx, node, previous), `DESIGN_REACTION_USER_EDIT_CONFLICT:${def.key}`);
-      else ensure(actual.length === 0 || canonical(actual) === canonical(desired), `DESIGN_REACTION_CONFLICT:${def.key}`);
-      if (canonical(actual) !== canonical(desired)) {
-        await setReactions(ctx, def, node, desired);
-      } else if (!previous) put(ctx.scope.root, index(ctx, 'reactions', def.key), { version: 2, digest: reactionDigest(ctx, node) });
+      await finalizeReactions(ctx, def, node);
       ctx.state.finalizeCursor = (ctx.state.finalizeCursor ?? 0) + 1;
       save(ctx);
     }
@@ -847,8 +1018,8 @@ export function createDesignRuntime(figma, guards) {
     function semanticPaint(p) {
       const r = { type: p.type, opacity: p.opacity ?? 1 };
       if (p.type === 'SOLID') { r.color = safe(p.color); if (p.boundVariables?.color) r.variableKey = variablesById.get(p.boundVariables.color.id) ?? 'UNKNOWN'; }
-      else if (p.type === 'IMAGE') { r.assetKey = imagesByHash.get(p.imageHash) ?? 'UNKNOWN'; r.scaleMode = p.scaleMode; }
-      else if (p.type === 'GRADIENT_LINEAR') { r.gradientTransform = safe(p.gradientTransform); r.gradientStops = safe(p.gradientStops); }
+      else if (p.type === 'IMAGE') { r.assetKey = imagesByHash.get(p.imageHash) ?? 'UNKNOWN'; r.scaleMode = p.scaleMode; if (p.imageTransform) r.imageTransform = safe(p.imageTransform); }
+      else if (p.type.startsWith('GRADIENT_')) { r.gradientTransform = safe(p.gradientTransform); r.gradientStops = safe(p.gradientStops); }
       return r;
     }
     const nodes = []; const reactions = [];
@@ -856,6 +1027,7 @@ export function createDesignRuntime(figma, guards) {
       const node = ctx.map.get(def.key);
       if (!node) { errors.push(`MISSING_NODE:${def.key}`); continue; }
       const s = snapshot(ctx, node); delete s.parentKey;
+      if (ctx.spec.schemaVersion === '1.1') { for (const field of ['x', 'y', 'width', 'height']) s[field] = node[field]; delete s.layoutDriven; }
       if (node.type === 'TEXT') s.textStyleId = node.textStyleId;
       if (node.type === 'INSTANCE') {
         const component = await node.getMainComponentAsync();
@@ -876,7 +1048,13 @@ export function createDesignRuntime(figma, guards) {
       const desired = nativeReactions(ctx, def);
       const actual = normalizedReactions(node);
       if (canonical(actual) !== canonical(desired)) errors.push(`REACTION_MISMATCH:${def.key}`);
-      for (const r of actual) for (const a of r.actions) if (a.type === 'NODE') reactions.push({ sourceKey: def.key, destinationKey: idToKey.get(a.destinationId) ?? 'UNKNOWN', trigger: r.trigger.type === 'AFTER_TIMEOUT' ? { type: 'AFTER_TIMEOUT', delaySeconds: r.trigger.timeout / (ctx.timerUnit === 'milliseconds' ? 1000 : 1) } : r.trigger });
+      for (const r of actual) for (const a of r.actions) if (a.type === 'NODE') {
+        const declared = (ctx.reactionDefs.get(def.key) ?? (def.type === 'INSTANCE' ? ctx.reactionDefs.get(def.props.componentKey) : null) ?? []).find(item => item.trigger.type === r.trigger.type);
+        const trigger = r.trigger.type === 'AFTER_TIMEOUT' ? declared?.trigger.timeoutMs !== undefined ? { type: 'AFTER_TIMEOUT', timeoutMs: r.trigger.timeout }
+          : { type: 'AFTER_TIMEOUT', delaySeconds: r.trigger.timeout / (ctx.timerUnit === 'milliseconds' ? 1000 : 1) }
+          : ['MOUSE_ENTER', 'MOUSE_LEAVE'].includes(r.trigger.type) ? { type: r.trigger.type, delayMs: r.trigger.delay } : r.trigger;
+        reactions.push({ sourceKey: def.key, destinationKey: idToKey.get(a.destinationId) ?? 'UNKNOWN', ...(ctx.spec.schemaVersion === '1.1' ? { navigation: a.navigation } : {}), trigger });
+      }
       if (node.type !== 'INSTANCE' && 'children' in node) {
         const children = ctx.children.get(def.key) ?? [];
         const expected = [...children.filter(n => !n.props?.isFixed), ...children.filter(n => n.props?.isFixed)].map(n => n.key);
@@ -892,7 +1070,13 @@ export function createDesignRuntime(figma, guards) {
     return { schemaVersion: '1.0', runId: ctx.payload.runId, specId: ctx.spec.id, specSignature: ctx.signature,
       collectedAt: new Date().toISOString(), fileIdentity: { fileKey: figma.fileKey }, scope: { pageId: ctx.scope.page.id, rootNodeId: ctx.scope.root.id },
       status: errors.length ? 'FAIL' : 'PASS', writes: 0, errors, nodes, reactions, flows,
-      counts: { nodes: nodes.length, texts: nodes.filter(n => n.type === 'TEXT').length, components: nodes.filter(n => n.type === 'COMPONENT').length, instances: nodes.filter(n => n.type === 'INSTANCE').length, reactions: reactions.length, flows: flows.length, textStyles: ctx.styles.size, variables: ctx.variables.size },
+      ...(ctx.spec.source?.behaviorStates ? { behaviorStates: ctx.spec.source.behaviorStates.map(state => ({ ...state,
+        nodes: state.nodeKeys.map(key => ({ key, id: ctx.map.get(key)?.id ?? null })) })) } : {}),
+      ...(ctx.spec.componentSets ? { componentSets: ctx.spec.componentSets.map(group => ({ key: group.key, id: ctx.map.get(group.key)?.id ?? null,
+        memberKeys: ctx.map.get(group.key)?.children.map(member => idToKey.get(member.id) ?? 'FOREIGN') ?? [],
+        variants: ctx.map.get(group.key)?.children.map(member => ({ key: idToKey.get(member.id) ?? 'FOREIGN', name: member.name })) ?? [] })) } : {}),
+      counts: { nodes: nodes.length, texts: nodes.filter(n => n.type === 'TEXT').length, components: nodes.filter(n => n.type === 'COMPONENT').length, instances: nodes.filter(n => n.type === 'INSTANCE').length, reactions: reactions.length, flows: flows.length, textStyles: ctx.styles.size, variables: ctx.variables.size,
+        ...(ctx.spec.componentSets ? { componentSets: nodes.filter(n => n.type === 'COMPONENT_SET').length } : {}) },
       textStyles: [...ctx.styles].map(([key, style]) => ({ key, ...styleSnapshot(style), name: ctx.spec.textStyles.find(s => s.key === key).name })),
       variables: [...ctx.variables].map(([key, variable]) => ({ key, name: ctx.spec.variables.find(v => v.key === key).name, value: Object.values(variable.valuesByMode)[0] })),
       fontSubstitutions: ctx.substitutions, timerUnit: ctx.timerUnit, playback: 'NOT VERIFIED', checkpoint: checkpoint(ctx) };
@@ -928,7 +1112,7 @@ export function createDesignRuntime(figma, guards) {
   }
   function positionCapture(ctx) {
     return designSignature({ ledger: readJson(ctx.scope.root, ctx.ledgerKey),
-      nodes: [...ctx.map].map(([key, node]) => ({ mapKey: key, id: node.id, raw: collectRawSnapshot(node),
+      nodes: [...ctx.map].map(([key, node]) => ({ mapKey: key, id: node.id, raw: collectRawSnapshot(node, false, ctx.spec.schemaVersion === '1.1'),
         parentId: node.parent?.id, children: node.children?.map(child => child.id),
         transform: safe(node.relativeTransform), layoutMode: safe(node.layoutMode), reactions: normalizedReactions(node),
         owner: node.getPluginData(NODE_SPEC), key: node.getPluginData(guards.specNodeKey),
@@ -1016,7 +1200,7 @@ export function createDesignRuntime(figma, guards) {
           }
         }
         ensure(parent.type !== 'PAGE' || node.parent === parent, 'DESIGN_POSITION_RECOVERY_ROOT_REPARENT_UNSUPPORTED');
-        const raw = collectRawSnapshot(node), normalized = { ...raw, x: def.x, y: def.y,
+        const raw = collectRawSnapshot(node, false, ctx.spec.schemaVersion === '1.1'), normalized = { ...raw, x: def.x, y: def.y,
           parentKey: parent.getPluginData(guards.specNodeKey) ?? '' };
         ensure(node.getPluginData(NODE_DIGEST) === designSignature(semanticSnapshot(ctx, normalized)),
           `DESIGN_POSITION_RECOVERY_CONTENT_CONFLICT:${def.key}`);
@@ -1082,6 +1266,7 @@ export function createDesignRuntime(figma, guards) {
     return { parents, stages };
   }
   async function positionRecovery(ctx) {
+    ensure(ctx.spec.schemaVersion === '1.0', 'DESIGN_POSITION_RECOVERY_VERSION_UNSUPPORTED');
     const request = ctx.payload.positionRecovery;
     ensure(['scope_design_plan', 'scope_design_apply'].includes(ctx.message.command) && request &&
       typeof request === 'object' && !Array.isArray(request) && Object.keys(request).every(key => ['nodeKeys', 'planSignature'].includes(key)) &&
@@ -1187,12 +1372,32 @@ export function createDesignRuntime(figma, guards) {
     ensure(!busy, 'DESIGN_RUNTIME_BUSY'); busy = true;
     try {
       const ctx = await context(message);
+      if (['scope_design_assets_plan', 'scope_design_asset_stage', 'scope_design_asset_commit'].includes(message.command)) {
+        ensure(ctx.spec.schemaVersion === '1.1', 'DESIGN_ASSET_VERSION_REQUIRED'); transferContext = ctx;
+        const request = { ...transferRequest(ctx), assetKey: ctx.payload.assetKey, offset: ctx.payload.offset, dataBase64: ctx.payload.dataBase64, chunkSha256: ctx.payload.chunkSha256 };
+        const result = await transfer[message.command === 'scope_design_assets_plan' ? 'plan' : message.command === 'scope_design_asset_stage' ? 'stage' : 'commit'](request);
+        if (message.command === 'scope_design_asset_commit' && result.status === 'COMMITTED') {
+          guards.assertInScope(ctx.scope.root, ctx.scope); guards.assertTrustedOwnership(ctx.ownership, message.operationId);
+          const asset = ctx.spec.assets.find(a => a.key === ctx.payload.assetKey), record = entry(ctx, 'image', asset.key);
+          if (!record) put(ctx.scope.root, index(ctx, 'image', asset.key), { hash: result.imageHash, signature: designSignature(asset) });
+          else ensure(record.hash === result.imageHash && record.signature === designSignature(asset), `DESIGN_ASSET_CONFLICT:${asset.key}`);
+        }
+        return { ...result, runId: ctx.payload.runId, specId: ctx.spec.id };
+      }
       if (ctx.payload.positionRecovery !== undefined) return await positionRecovery(ctx);
       if (ctx.payload.adoptNativeFlow !== undefined) ensure(message.command === 'scope_design_apply' &&
         ctx.payload.reconcile === true && ctx.state.pending?.kind === 'reactions', 'DESIGN_NATIVE_FLOW_ADOPTION_INVALID');
       await fonts(ctx, message.command === 'scope_design_apply');
       await readResources(ctx);
+      if (message.command === 'scope_design_apply') for (const asset of ctx.spec.assets ?? []) if (!asset.dataBase64) ensure(ctx.images.has(asset.key), `DESIGN_ASSET_NOT_STAGED:${asset.key}`);
       if (message.command === 'scope_design_audit') return auditPage(ctx, await audit(ctx));
+      if (ctx.state.pending?.kind === 'node' && ctx.definitions.get(ctx.state.pending.key)?.type === 'COMPONENT_SET' && !ctx.map.has(ctx.state.pending.key)) {
+        // Combining moves existing masters. Without a durable set readback,
+        // their changed parent digests cannot prove a completed combination.
+        // Never recreate a set or rewrite those digests to make recovery pass.
+        if (ctx.payload.reconcile === true) throw new Error(`DESIGN_NEEDS_RECONCILIATION:node:${ctx.state.pending.key}`);
+        return { status: 'NEEDS_RECONCILIATION', writes: 0, runId: ctx.payload.runId, specId: ctx.spec.id, checkpoint: checkpoint(ctx), nextAction: 'audit' };
+      }
       checkExisting(ctx);
       if (message.command === 'scope_design_plan') return { status: ctx.state.pending ? 'NEEDS_RECONCILIATION' : 'PLANNED', writes: 0,
         specId: ctx.spec.id, specSignature: ctx.signature, runId: ctx.payload.runId, checkpoint: checkpoint(ctx), fontSubstitutions: ctx.substitutions,

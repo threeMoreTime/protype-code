@@ -18,6 +18,7 @@ import {
 import { TaskAuthorizationStore } from "./task-authorization-store.mjs";
 import { MutationAudit } from "./mutation-audit.mjs";
 import { DESIGN_ACTIONS, designPayload } from "../design/commands.mjs";
+import { ASSET_TRANSFER_COMMANDS, ASSET_TRANSFER_LIMITS } from "../design/asset-transfer.mjs";
 import { MAX_DESIGN_TIMEOUT_MS } from "../design/request-timeout.mjs";
 
 const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
@@ -750,6 +751,9 @@ export async function startBridge({ port, requestTimeoutMs = 12_000, logger, all
         } : payload,
       };
 
+      if (ASSET_TRANSFER_COMMANDS.has(command) && Buffer.byteLength(JSON.stringify(envelope), 'utf8') > ASSET_TRANSFER_LIMITS.requestBytes) {
+        return fail(new Error('DESIGN_TRANSPORT_BUDGET_EXCEEDED'), 'DESIGN_INPUT_INVALID');
+      }
       try { audit("EXECUTING"); } catch (error) { return Promise.reject(error); }
       return new Promise((resolve, reject) => {
         const startedAt = Date.now();

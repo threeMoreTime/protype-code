@@ -1,12 +1,25 @@
 import { validateDesignSpec } from './spec.mjs';
+import { ASSET_TRANSFER_COMMANDS, ASSET_TRANSFER_LIMITS, validateAssetTransferInput } from './asset-transfer.mjs';
 
 export const DESIGN_ACTIONS = Object.freeze({
   scope_design_plan: 'read', scope_design_audit: 'read',
   scope_design_apply: 'design', scope_design_export_png: 'export',
+  scope_design_assets_plan: 'read', scope_design_asset_stage: 'design', scope_design_asset_commit: 'design',
 });
 export function designPayload(command, input) {
   if (!Object.hasOwn(DESIGN_ACTIONS, command)) throw new Error('DESIGN_COMMAND_INVALID');
   if (!input || typeof input !== 'object') throw new Error('DESIGN_INPUT_REQUIRED');
+  if (ASSET_TRANSFER_COMMANDS.has(command)) {
+    const fields = command === 'scope_design_asset_stage' ? ['assetKey', 'offset', 'dataBase64', 'chunkSha256']
+      : command === 'scope_design_asset_commit' ? ['assetKey'] : [];
+    const allowed = new Set(['expectedFileIdentity', 'workspaceId', 'taskId', 'authorizationId', 'revision', 'operationId', 'spec', 'runId', ...fields]);
+    for (const key of Object.keys(input)) if (!allowed.has(key)) throw new Error(`DESIGN_INPUT_UNKNOWN: ${key}`);
+    validateDesignSpec(input.spec);
+    if (typeof input.runId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(input.runId)) throw new Error('DESIGN_RUN_ID_INVALID');
+    const payload = { spec: input.spec, runId: input.runId, ...validateAssetTransferInput(command, input) };
+    if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > ASSET_TRANSFER_LIMITS.requestBytes) throw new Error('DESIGN_TRANSPORT_BUDGET_EXCEEDED: use bounded asset chunks');
+    return payload;
+  }
   const allowed = new Set(['expectedFileIdentity', 'workspaceId', 'taskId', 'authorizationId',
     'revision', 'operationId', 'spec', 'runId', 'batchSize', 'timerUnit',
     'allowGlobalResources', 'nodeKey', 'scale', 'reconcile', 'adoptNativeFlow', 'auditOffset', 'auditLimit']);
@@ -18,6 +31,7 @@ export function designPayload(command, input) {
   if (input.timerUnit !== undefined && !['seconds', 'milliseconds'].includes(input.timerUnit)) throw new Error('DESIGN_TIMER_UNIT_INVALID');
   for (const key of ['allowGlobalResources', 'reconcile']) if (input[key] !== undefined && typeof input[key] !== 'boolean') throw new Error(`DESIGN_${key}_INVALID`);
   if (Object.hasOwn(input, 'positionRecovery')) {
+    if (input.spec.schemaVersion !== '1.0') throw new Error('DESIGN_POSITION_RECOVERY_VERSION_UNSUPPORTED');
     const recovery = input.positionRecovery;
     const applying = command === 'scope_design_apply';
     const keys = applying ? ['nodeKeys', 'planSignature'] : ['nodeKeys'];

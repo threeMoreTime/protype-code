@@ -24,6 +24,9 @@ export const COMMANDS = Object.freeze({
   SCOPE_DESIGN_APPLY: "scope_design_apply",
   SCOPE_DESIGN_AUDIT: "scope_design_audit",
   SCOPE_DESIGN_EXPORT_PNG: "scope_design_export_png",
+  SCOPE_DESIGN_ASSETS_PLAN: "scope_design_assets_plan",
+  SCOPE_DESIGN_ASSET_STAGE: "scope_design_asset_stage",
+  SCOPE_DESIGN_ASSET_COMMIT: "scope_design_asset_commit",
 });
 
 export const ALLOWED_COMMANDS = new Set(Object.values(COMMANDS));

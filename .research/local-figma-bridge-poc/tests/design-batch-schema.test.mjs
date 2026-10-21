@@ -21,13 +21,28 @@ test('registered DesignSpec tools publish the bounded 500 batch and reject large
   const client = new Client({ name: 'design-batch-schema-test', version: '0.0.1' });
   t.after(async () => { await client.close(); await rm(directory, { recursive: true, force: true }); });
   await client.connect(transport);
-  const tools = (await client.listTools()).tools.filter(tool => tool.name.startsWith('figma_scope_design_'));
-  assert.equal(tools.length, 4);
+  const allTools = (await client.listTools()).tools.filter(tool => tool.name.startsWith('figma_scope_design_'));
+  const resourceNames = ['figma_scope_design_assets_plan', 'figma_scope_design_asset_stage', 'figma_scope_design_asset_commit'];
+  const tools = allTools.filter(tool => !resourceNames.includes(tool.name));
+  assert.deepEqual(tools.map(tool => tool.name).sort(), [
+    'figma_scope_design_plan', 'figma_scope_design_apply', 'figma_scope_design_audit',
+    'figma_scope_design_export_png',
+  ].sort());
   for (const tool of tools) {
     assert.equal(tool.inputSchema.properties.batchSize.type, 'integer', tool.name);
     assert.equal(tool.inputSchema.properties.batchSize.minimum, 1, tool.name);
     assert.equal(tool.inputSchema.properties.batchSize.maximum, 500, tool.name);
   }
+  const resourceTools = allTools.filter(tool => resourceNames.includes(tool.name));
+  assert.deepEqual(resourceTools.map(tool => tool.name).sort(), resourceNames.sort());
+  for (const tool of resourceTools) {
+    assert.equal(tool.inputSchema.additionalProperties, false);
+    assert.equal(Object.hasOwn(tool.inputSchema.properties, 'batchSize'), false);
+    assert.equal(tool.annotations.readOnlyHint, tool.name.endsWith('assets_plan'));
+  }
+  const stage = resourceTools.find(tool => tool.name.endsWith('asset_stage'));
+  assert.equal(stage.inputSchema.properties.dataBase64.maxLength, Math.ceil(1024 * 1024 / 3) * 4);
+  assert.equal(stage.inputSchema.properties.offset.maximum, 20 * 1024 * 1024);
   for (const batchSize of [501, 1000]) {
     const result = await client.callTool({ name: 'figma_scope_design_apply', arguments: {
       expectedFileIdentity: 'figma-file:batch-schema-test', workspaceId: WORKSPACE_ID, taskId: TASK_ID,
