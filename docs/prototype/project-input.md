@@ -34,6 +34,45 @@ Figma 使用捕获几何和可编辑图层替代该状态的模板画面，其�
 
 普通下拉框保留公开的选中项标签，用于还原控件画面；选项或所属 optgroup 标有 `data-capture-private` 时，标签留空且 `valueCaptured` 为 false。显式开启输入值采集也不能越过隐私标记，采集过程不会修改源页面。
 
+## 受控 Figma 证据输入（第一阶段）
+
+`prototype/inputs/figma-evidence.mjs` 提供独立的 `loadFigmaEvidence(file, options)`，目录由 `prototype/core/design-catalog.mjs` 的 `validateDesignCatalog(catalog)` 校验。此入口不接入现有 `loadDocument()`、CLI 或 renderer，不把设计目录当作 `PrototypeSpec` 或业务路由。
+
+输入是 UTF-8 JSON，`schemaVersion` 必须为 `DesignEvidence1.0`，总大小不超过 10 MiB。只读取调用方指定的这一个文件，拒绝文件或中间目录符号链接、越界路径、非普通文件及读取期间发生变化的文件。必须显式传入输入根目录和两个独立摘要：
+
+```js
+import { loadFigmaEvidence } from './prototype/inputs/figma-evidence.mjs';
+
+export async function inspectDesignEvidence(file, trustedAnchors) {
+  const { evidence, integrity } = await loadFigmaEvidence(file, {
+    inputRoot: trustedAnchors.inputRoot,
+    expectedEvidenceHash: trustedAnchors.expectedEvidenceHash,
+    expectedSourceHash: trustedAnchors.expectedSourceHash,
+  });
+  return {
+    integrity,
+    pageCount: evidence.catalog.pages.length,
+    catalogCount: evidence.catalog.entries.length,
+    nodeCount: evidence.nodeEvidence.length,
+    diagnostics: evidence.diagnostics,
+  };
+}
+```
+
+`expectedEvidenceHash` 校验实际 JSON 文件字节；`expectedSourceHash` 必须等于 JSON 的 `sourceHash`，用于绑定原设计快照。两个值应来自调用方已信任的记录，不能拿待验证文件自报的摘要代替独立锚点。摘要一致证明字节一致，不证明文件来源真实、设计语义正确或云端内容仍相同。
+
+契约包含以下顶层字段，未知字段一律拒绝：
+
+- `source`：`kind`（`figma-export`、`figma-plugin` 或 `manual`）、`fileKey`、`name`、`capturedAt`，以及可选 `revision`；`sourceHash` 单独保存原快照 SHA-256。
+- `catalog.pages`：`id/sourceNodeId/name/internalOnly`；`catalog.entries`：`id/sourceNodeId/pageId/parentId/name/role/independentBoard/hidden`，以及可选 `boardKind/manuscript/variant/state/evidenceText`。父级为空或对应同页目录条目；组织页 ID 作为父级时规范化为空。`role` 为 screen、section、module、component、asset 或 annotation。同名异 ID 画板分别保留。
+- `nodeEvidence`：节点身份、页面、父级、原生类型、名称，以及可选文字、几何、可见性、透明度。可选 `readback` 仅保存 PluginAPI 读取版本、文件身份、完整性标记和摘要，不把这个引用当作已经导入完整视觉字段。
+- `componentEvidence`：`state-group` 的成员、`component` 的变体值和所属组、`instance` 的 master 引用。`RESOLVED` 引用必须存在；原本缺失的 master 用 `UNRESOLVED/rawTarget` 保留。验证包含关系及实例依赖环，不展开整个虚拟实例树。
+- `interactionEvidence`：每次出现使用独立 `id`；`nativeInteractionId` 可重复，仅用于溯源。`kind` 区分 native、override、annotation、inferred，`scope` 区分 component、business、unresolved。保存可选 `event/effect/target/deleted/text/recordPath/delayMs`；不从文字或 partial override 补造动作。原生组件切换不能声明为业务导航，也不能指向任意文字或框架节点。
+- `assetIndex`：资源 ID、来源 key、受控相对路径、SHA-256、MIME、字节数及像素尺寸。路径只使用 `/`，拒绝绝对路径、盘符、UNC、ADS、反斜杠、空片段及 `.`/`..`。本阶段只校验索引，**不读取图片**，不宣称文件存在、MIME 签名或内容摘要已验证。
+- `diagnostics`：保留明确 code、severity、message、可选来源 evidenceId 及 NOT_VERIFIED/UNRESOLVED 状态。缺失目标、实例补丁、推断行为和缺失 timeout 均进入诊断；不拿动画时长充当触发延时。
+
+上限为 1,000 个组织页、25,000 个目录条目、25,000 个节点、25,000 条组件证据、30,000 条交互出现、2,000 项资源及 10,000 条诊断。字段和引用校验通过，只能证明受控证据契约成立，不能证明双端生成或业务流程通过验收。源文案、脚本、命令或外链字符串全部作为数据保留，不执行、不打开、不上传。
+
 ## 单节点 PluginAPI 只读补证
 
 原有 `figma_scope_read_node({ targetNodeId })` 保持可用。需要原生视觉字段时可显式增加 `evidence`：
@@ -59,3 +98,13 @@ Figma 使用捕获几何和可编辑图层替代该状态的模板画面，其�
 `text` 返回实际 `getStyledTextSegments()` 的 UTF-16 start/end/characters 和选定样式，mixed 整段字体不覆盖实际范围样式。children 和文字范围分页均有 total/offset/nextOffset；后续页使用相同 `snapshotHash` 才能合并。单页 `complete: false` 不等于整次读取失败，也不代表全部内容已取得。字段记录（包含摘要及元数据）限制 512 KiB，完整响应限制 7 MiB；超限拒绝，不截断后冒充完整。
 
 响应的 `source/readVersion/fileIdentity/nodeId/readScope/fields/sha256` 用于溯源。字段 `sha256` 绑定当前 value，分页 `snapshotHash` 绑定完整源集合，顶层 `sha256` 绑定不含自身摘要的整个响应。这些证据必须在本地导出时附入受控清单或摘要引用，不能根据未解析的 `.fig` blob 猜造。此读取路径没有 setter、pluginData 写入或生成操作；本地 API double 通过仍不能替代真实插件补证。
+
+仓库中的可复现检查入口：
+
+```powershell
+npm run test:prototype
+npm test
+npm run check:bundle
+```
+
+这些入口只运行当前 checkout 已包含的测试。此次提交仅允许既有 `design-batch-schema.test.mjs` 契约测试随功能更新，其余新增或修改的测试和夹具留在本地；因此上述命令本身不证明离线证据导入和原生补证的新增定向用例已执行。补充测试的精确文件、输入与结果记录在本地验证报告中，与干净候选结果分开。`npm test` 会触发桥接 `pretest` 并重新生成插件，提交候选应在隔离目录运行。真实 PluginAPI 字段、字体和完整源场景仍须另行验证。

@@ -23,7 +23,7 @@ Node 22.18+；根目录安装产品解析器，桥接目录保留独立依赖和
 
 1.1 是显式版本，不迁移或改写 1.0。`PrototypeSchema` 保留 1.0 定义；新增 `PrototypeV1_1Schema`，`validatePrototype()` 根据 `schemaVersion` 分派并返回原版本。PRD、React 和旧 capture 默认仍生成 1.0。1.0 的默认值、规范化字段顺序、HTML、DesignSpec、manifest 和 ZIP 字节由冻结的合成基线回归验证。
 
-现有 `loadDocument()` 可加载显式 1.1 JSON。路径和业务页分组须由调用方明确提供，不从画板名称猜出真实业务路由。场景内稳定 ID 以场景和源记录生成，跨场景共享 master 仍有独立记录。
+现有 `loadDocument()` 可加载显式 1.1 JSON。独立的离线证据导入 API 可通过 `prototypeFromFigmaEvidence(evidence, options)` 转换受控证据；它不由 CLI 自动调用，输入边界见[受控 Figma 证据输入](project-input.md)。转换选项必须明确提供项目 ID 和场景：`sourceNodeId/pageId/title/path/sceneId/device/viewport`，以及可选 `stateId/variantId/role`。路径和业务页分组是调用方的原型设置，不是从画板名称猜出的真实业务路由。源节点、完整组件 master 和同组成员形成依赖闭包；场景内稳定 ID 以场景和源记录生成，跨场景共享 master 仍有独立记录。
 
 ### 数据所有权与依赖方向
 
@@ -56,6 +56,8 @@ const resolved = await resolveAssets(model, controlledAssetRoot);
 1.1 `actions` 具有 source scene/node、typed trigger、typed effect、可选 component-state guard 和 evidenceIds。支持 click、submit、hover、mouse-enter/leave、timeout、focus/blur；timeout 必须给毫秒延时，其他 trigger 不接受延时。effect 只支持 navigate、change-state、clipboard 和 unresolved，不包含任意脚本或 URL 执行语言。按源节点和触发检测冲突，仅互斥的同组件状态 guard 可共存。局部 change-state 只能指向同族成员，不改变业务场景。
 
 `flows` 具有 entrySceneId 和有序 actionIds。入口必须存在且非 reference；导航后下一动作源场景必须连续，局部状态变化和剪贴板不伪装成导航。静态可达性沿最多 100 条、每条 2,000 步的显式流程检查，不展开无穷状态组合。未决 effect 或无法证明的 guard 保持 NEEDS_REVIEW；图校验本身不执行动作，也不声明 Figma/HTML EXACT 能力。生成后的 HTML 由有界运行时执行支持的动作，实际执行结果与静态能力声明分开记录。
+
+证据转换器只映射已知的原生 click、hover、mouse-enter/leave、timeout 和可解析目标。ON_PRESS 不改写成 click，缺失 timeout 不拿动画时长填补。注释、推断、删除记录和 partial override 不生成可执行动作；导航指向未选场景或 reference 时保留 unresolved。实例视觉覆盖、paint、native vector、富文本范围和布局若只有摘要或原始未解析记录，仍保留不完整诊断，不套用 master 外观冒充已还原实例。
 
 ### 只读资源边界
 

@@ -24,11 +24,13 @@ npm run prototype -- --input <受控目录中的1.1.json> --out <新的输出目
 
 `read-node` 可携带显式 evidence.fields 与 readScope，以及受限 children/text 分页参数。root 必须属于声明页面，不能读入未授权的其他文件/页面或自动跟随跨范围 master。原生 ID 与离线源 ID 不一致时，必须先明确映射。字段、完整源快照和整包哈希应独立重算；分页未收齐或原生字段不可读时不能称完整输入。
 
-固定子层不读取逐节点 `isFixed`：真实 PluginAPI 使用父容器 `numberOfFixedChildren`。只读 helper 在明确 scope 内读取父 children 顺序和固定数量，派生逻辑 isFixed 并附 layout.derivations 证明；父范围不足、API 缺失或计数无效时停止。补证使用前应独立核对父身份、完整 children 顺序、末尾固定层数与布尔值。PAGE/SECTION 等无此固定子层能力的父类型有明确原因，不能将任意未知父节点当作 false。[官方 API 说明](https://developers.figma.com/docs/plugins/api/properties/nodes-numberoffixedchildren/)
+固定子层不读取逐节点 `isFixed`：真实 PluginAPI 使用父容器 `numberOfFixedChildren`。只读 helper 在明确 scope 内读取父 children 顺序和固定数量，派生逻辑 isFixed 并附 layout.derivations 证明；父范围不足、API 缺失或计数无效时停止。导入器独立核对父身份、完整 children 顺序、末尾固定层数与布尔值。PAGE/SECTION 等无此固定子层能力的父类型有明确原因，不能将任意未知父节点当作 false。[官方 API 说明](https://developers.figma.com/docs/plugins/api/properties/nodes-numberoffixedchildren/)
 
 局部 readback SHA 只证明所保存字节未变，不证明这些字段足以还原整个场景。原生 layout、text ranges、vectorPaths、mask 和 paint 值必须经输入适配器收敛到 1.1 白名单；摘要、字段名、名称推断和未解析 blob 不能代替值。
 
-当前跨范围或跨页面 master 会由只读 helper 返回 NOT_VERIFIED_MASTER_SCOPE_REQUIRED，不能伪造成完整 component 读回。涉及此模式的源场景需要先补受控原生证据和明确对应关系。1.1 场景中显式声明 instance 子节点也停止，避免 HTML 忽略这些节点而原生端尝试创建；可支持的实例内容通过 master 和显式 overrides 表达。
+`applyFigmaNativeEvidence(metadataModel, options)` 是独立的离线导入边界，位于 `prototype/inputs/figma-native.mjs`。options 显式包含 fileIdentity、逐视图节点的 source/native ID 与 readScope 对应、完整 readback capsules 及 imageBindings。它重新校验包与字段 SHA、分页快照、属性状态、父子和 master 身份；返回 model 与独立 nativeEvidence 证明清单。字段未收齐、圆角/effects 未读取、图片未绑定、原生样式无法表达等情况明确停止。完整白名单证据只可替换其实际覆盖的 metadata-only 视觉诊断；其他未知诊断保留。原生图片 hash 的显式元数据对应仍须由 resolveAssets 核验本地字节。
+
+当前跨范围或跨页面 master 会由只读 helper 返回 NOT_VERIFIED_MASTER_SCOPE_REQUIRED，不能伪造成完整 component 读回。导入器保留这项停止边界；涉及此模式的源场景需要先补受控原生证据和明确对应关系。1.1 场景中显式声明 instance 子节点也停止，避免 HTML 忽略这些节点而原生端尝试创建；可支持的实例内容通过 master 和显式 overrides 表达。
 
 ## 分段传输
 
@@ -48,6 +50,6 @@ stage/commit 沿用 design 授权，绑定 spec 签名、runId、file/page/root�
 
 合成测试覆盖本地 PC/H5 viewport、实例覆盖、DOM 富文本、SVG 原生矢量、线性/径向渐变、VECTOR mask、图片采样矩阵、显式滚动、离线 CSP 与 LF/CRLF。测试用图片和页面不能代表源稿；截图亦须标明 synthetic。
 
-HTML 暂不支持角向/菱形渐变、复杂 mask、ALPHA/LUMINANCE mask、文本 stroke、未知字款名、嵌套 fixed 等，会明确报 UNSUPPORTED。原生编译保留四种渐变及支持字段，实际宿主 API/字体仍需回读审计。没有真实字款不能以自动回退算高保真 PASS；不会自动下载或安装字体。
+HTML 暂不支持角向/菱形渐变、复杂 mask、ALPHA/LUMINANCE mask、文本 stroke、未知字款名、嵌套 fixed 等，会明确报 UNSUPPORTED。原生补证导入当前不支持原生 GROUP 类型，不能因旧 metadata 将其归为 frame 就宣称已等价。原生编译保留四种渐变及支持字段，实际宿主 API/字体仍需回读审计。没有真实字款不能以自动回退算高保真 PASS；不会自动下载或安装字体。
 
 完整源场景仍须核对文字、图片裁切、层级、布局、尺寸、颜色、组件覆盖与可编辑结构，并保存源稿对照截图和可接受偏差。真实 Figma 不在本地测试期间被修改。coverage 保留 NEEDS_REVIEW，visualComparison / figmaNative 为 NOT_RUN；成功生成的交付将 interactionRuntime 标记 AVAILABLE_NOT_RUN，incremental 标记 SUPPORTED_OFFLINE。该标记只说明离线三方合并、场景影响分析和重新交付能力，不表示原生同稿更新、浏览器执行或源稿视觉已验收。
