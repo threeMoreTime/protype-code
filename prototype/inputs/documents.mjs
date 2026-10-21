@@ -63,7 +63,11 @@ export async function loadDocument(file, options = {}) {
   const info = await stat(file);
   if (!info.isFile() || info.size > 10 * 1024 * 1024) throw new Error('Input must be a file up to 10 MiB');
   const bytes = await readFile(file), extension = path.extname(file).toLowerCase();
-  if (extension === '.json') return validatePrototype(JSON.parse(bytes.toString('utf8')));
+  if (extension === '.json') {
+    const input = JSON.parse(bytes.toString('utf8'));
+    if (input.schemaVersion === '1.1') new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return validatePrototype(input);
+  }
   const model = parsePRD(documentToText(bytes, extension), { ...options, file: path.basename(file) });
   model.sources[0].sha256 = digest(bytes);
   if (['.docx', '.html', '.htm'].includes(extension)) model.diagnostics.push({ code: 'TEXT_EXTRACTION', severity: 'info', message: '来源行号指抽取后的文本行。布局、批注、图片、表格结构和复杂样式需人工核对；不执行嵌入内容。' });

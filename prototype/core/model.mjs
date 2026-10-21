@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { DesignCatalogSchema, designEvidenceId, assertEvidenceData, validateDesignCatalog, evidenceRecordMap } from './design-catalog.mjs';
+import { PresentationSchema, TokensSchema, compilePresentation } from './presentation.mjs';
+import { ActionSchema, FlowSchema, validateInteractionGraph } from './interactions.mjs';
+import { AssetsSchema } from './assets.mjs';
 
 // Business semantics live here; no Figma API, HTML, repository name or selectors.
 const id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,39}$/);
@@ -34,7 +38,7 @@ export const PrototypeSchema = z.object({
   diagnostics: z.array(z.object({ code: id, severity: z.enum(['info', 'warning', 'error']), message: text, source: source.optional(), requirementId: id.optional() }).strict()).max(3000).default([]),
 }).strict();
 
-export function validatePrototype(input) {
+function validateLegacyPrototype(input) {
   const model = PrototypeSchema.parse(input);
   if (model.pages.reduce((n, p) => n + p.states.length, 0) > 200 || model.pages.reduce((n, p) => n + p.states.length * p.elements.length, 0) > 6000) throw new Error('Prototype render budget exceeded; split the project');
   const unique = (items, label, key = 'id') => {
@@ -75,6 +79,62 @@ export function validatePrototype(input) {
     }
   }
   return model;
+}
+
+// Separate schema: old defaults, normalized property order and bytes stay 1.0.
+export const PrototypeV1_1Schema = z.object({
+  schemaVersion: z.literal('1.1'), id, name: z.string().min(1).max(200),
+  sources: z.array(z.object({ file: text, kind: z.enum(['prd', 'code', 'capture', 'manual', 'figma']), sha256: z.string().regex(/^[0-9a-f]{64}$/) }).strict()).max(1000),
+  requirements: PrototypeSchema.shape.requirements,
+  pages: z.array(page.omit({ elements: true })).min(1).max(100),
+  catalog: DesignCatalogSchema, presentation: PresentationSchema, tokens: TokensSchema.default([]), assets: AssetsSchema.default([]),
+  actions: z.array(ActionSchema).max(30000), flows: z.array(FlowSchema).max(100),
+  evidenceIds: z.array(designEvidenceId).max(100000).default([]),
+  assumptions: z.array(text).max(500).default([]),
+  diagnostics: z.array(z.object({ code: designEvidenceId, severity: z.enum(['info', 'warning', 'error']), message: text,
+    evidenceIds: z.array(designEvidenceId).max(500).optional() }).strict()).max(3000).default([]),
+}).strict();
+
+export function validatePrototype(input) {
+  const version = input && typeof input === 'object' ? Object.getOwnPropertyDescriptor(input, 'schemaVersion') : undefined;
+  if (version?.get || version?.set) throw new Error('PROTOTYPE_DATA_ONLY');
+  if (version?.value !== '1.1') return validateLegacyPrototype(input);
+  assertEvidenceData(input);
+  const pending = [input]; let units = 0;
+  while (pending.length) {
+    const value = pending.pop();
+    if (typeof value === 'string') units += value.length + 2;
+    else if (value && typeof value === 'object') { units += Object.keys(value).reduce((sum, key) => sum + key.length + 3, 0); pending.push(...Object.values(value)); }
+    else units += 5;
+    if (units > 10 * 1024 * 1024) throw new Error('PROTOTYPE_1_1_INPUT_BUDGET');
+  }
+  if (Buffer.byteLength(JSON.stringify(input)) > 10 * 1024 * 1024) throw new Error('PROTOTYPE_1_1_INPUT_BUDGET');
+  const parsed = PrototypeV1_1Schema.safeParse(input);
+  if (!parsed.success) throw new Error(`PROTOTYPE_1_1_SCHEMA: ${parsed.error.issues.slice(0, 5).map(i => `${i.path.join('.')}:${i.code}`).join('; ')}`);
+  const model = parsed.data;
+  model.catalog = validateDesignCatalog(model.catalog);
+  evidenceRecordMap(model.pages, 'pages'); evidenceRecordMap(model.pages, 'page paths', 'path');
+  const requirements = evidenceRecordMap(model.requirements, 'requirements');
+  evidenceRecordMap(model.evidenceIds.map(id => ({ id })), 'evidence IDs');
+  const evidenceIds = new Set(model.evidenceIds);
+  let stateCount = 0;
+  for (const p of model.pages) {
+    evidenceRecordMap(p.states, 'page states'); stateCount += p.states.length;
+    if (p.states.filter(s => s.kind === 'default').length !== 1 || p.states.find(s => s.kind === 'default').id !== 'default') throw new Error('PROTOTYPE_1_1_DEFAULT_STATE');
+    for (const item of [p, ...p.states]) for (const ref of item.requirementIds) if (!requirements.has(ref)) throw new Error('PROTOTYPE_1_1_REQUIREMENT_REFERENCE');
+  }
+  if (stateCount > 200) throw new Error('PROTOTYPE_1_1_STATE_BUDGET');
+  const scenes = new Set(model.presentation.scenes.map(s => s.id));
+  for (const asset of model.assets) for (const sceneId of asset.sceneIds) if (!scenes.has(sceneId)) throw new Error('PROTOTYPE_1_1_ASSET_SCENE');
+  for (const item of model.diagnostics) for (const ref of item.evidenceIds ?? []) if (!evidenceIds.has(ref)) throw new Error('PROTOTYPE_1_1_DIAGNOSTIC_REFERENCE');
+  compilePresentation(model); validateInteractionGraph(model);
+  return model;
+}
+
+export function assertPrototypePhase(input, phase) {
+  const version = input && typeof input === 'object' ? Object.getOwnPropertyDescriptor(input, 'schemaVersion') : undefined;
+  if (version?.get || version?.set) throw new Error('PROTOTYPE_DATA_ONLY');
+  if (version?.value === '1.1') throw new Error(`Prototype 1.1 is unavailable in this entry until phase ${phase}`);
 }
 
 export function canonical(value) {

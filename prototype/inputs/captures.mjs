@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { adaptDOMCaptures } from '../../.research/local-figma-bridge-poc/capture/generic.mjs';
 import { validateDesignSpec } from '../../.research/local-figma-bridge-poc/design/spec.mjs';
-import { digest } from '../core/model.mjs';
+import { digest, assertPrototypePhase } from '../core/model.mjs';
 import { frameKey } from '../renderers/figma.mjs';
 
 const Snapshots = z.object({ snapshots: z.array(z.object({
@@ -10,6 +10,7 @@ const Snapshots = z.object({ snapshots: z.array(z.object({
 }).strict()).min(1).max(100) }).strict();
 
 export function applyRuntimeCaptures(model, original, input) {
+  assertPrototypePhase(model, 3);
   if (Buffer.byteLength(JSON.stringify(input)) > 6 * 1024 * 1024) throw new Error('Capture attachment exceeds 6 MiB');
   const attachments = Snapshots.parse(input), spec = structuredClone(original), warnings = [], seen = new Set();
   for (const snapshot of attachments.snapshots) {

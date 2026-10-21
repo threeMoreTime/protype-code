@@ -1,5 +1,7 @@
 # 通用原型生成首版验收（2026-10-14）
 
+以下首版记录属于历史快照。1.1 的执行方法与证据边界见本页 Task 5；原生验收记录按各自日期阅读。旧测试数量、环境版本和历史 Figma 状态不代表当前运行结果。
+
 目标：从不同业务的 PRD 或 React 项目得到同一通用定义，生成可编辑 Figma 节点输入和离线交互 HTML；更新时保护人工修改。基于 dev 的 `05f508a4ac03651ee366f6d41c4048206e691334` 开发。
 
 ## 跨项目结果
@@ -41,6 +43,32 @@ npm run test:browser
 npm audit
 npm --prefix .research/local-figma-bridge-poc audit
 ```
+
+## Task 5：1.1 交付、增量与预算验收
+
+执行本轮命令并读取当次结果，不沿用首版统计：
+
+```powershell
+npm run test:prototype
+npm run acceptance
+npm run test:browser
+npm test
+npm run check:bundle
+```
+
+上述入口只运行当前 checkout 中已入库的测试。此次仅允许既有 `design-batch-schema.test.mjs` 契约测试随功能更新，其余新增或修改的测试和夹具留在本地；新增 1.1 交付、场景合并、预算及浏览器定向用例须在本地验证报告中另列精确命令与结果，不能由上述入口通过推断已覆盖。`npm test` 的桥接 `pretest` 会生成插件，候选检查应在隔离目录执行，并复核生成物没有额外变化。
+
+`npm run acceptance` 默认验证 admin、mobile、content 三份 1.0 示例。1.1 验收须显式提供输入，可用 `node scripts/verify-prototype.mjs --input <1.1.json> [--packages | --plan-only]` 检查单包、集合或计划的本地交付契约；生产验收脚本不加载测试夹具。`--out <新报告.json>` 使用排他写入；不覆盖已有报告。任何合成输入的本地检查通过都不能证明学练平台源稿已还原。
+
+单包检查必须包括路径、大小写碰撞、manifest 文件精确覆盖、逐文件 bytes/SHA-256、ZIP CRC 和精确内容、资源引用/真实字节/去重、logical spec 与 envelope 预算。集合还须检查根文件清单、每个独立 ZIP 的哈希、完整最小连通闭包、没有跨包断线、分包 lineage 与暂存总量。BLOCKED 包必须有闭包和原因，不能残留被当作可交付的 HTML/spec/archive。相连流程在资源分段后仍超限时停止，不通过进一步切开流程制造 PASS。
+
+1.1 生成包必须保留 DesignSpec；只有明确的 PLAN_ONLY、无生成文件且全部场景有未决原因时才允许省略。场景校验绑定模型投影、物化输入树、原生 viewport 根和实际资源；spec 的 PASS 表示 schema 校验。校验器不逐节点重编译比对 HTML/DesignSpec，不证明两端渲染或 reaction 完全等价。独立 DesignSpec 没有产品模型时，资产检查只记录 TRANSPORT_INTEGRITY_ONLY。
+
+1.1 coverage 始终 NEEDS_REVIEW，分别记录 inventory、visualGeneration、dualInteractionCapability、automaticTests、realFigma 和 humanDifferences。完整条目映射不代表视觉生成；编译能力不代表浏览器执行；真实 Figma 未运行保留 NOT_RUN，人工差异未检查保留 NOT_MEASURED。自动测试结果在当次运行日志中记录，生成器不把自己的产物自动标为测试 PASS。
+
+学练平台全量受控目录为 4109 项、169 个独立画板、58 个 screen（22 PC / 36 H5）。58 screen 可分别建立合法元数据闭包，累计声明 110011 节点，不能并作一个 ≤25000 节点模型。最终清单应逐项回溯源 ID 与分类证据，并登记未收齐视觉输入的 UNRESOLVED；不会把 4 场景样本扩展宣称为全量视觉产物。manuscript 缺失、未确认方案命名和缺失业务目标分别保留未决。
+
+报告需区分 SOURCE / MODEL / LOCAL TEST / BROWSER / FIGMA AUDIT / FIGMA PRESENT / ROUND-TRIP。Task 3 的字体、mask、跨范围 master 与完整视觉输入门禁保持有效；Task 5 的结构/预算/增量测试不解除它。真实 Figma 写入、Present、导出和独立回导属于后续经具体目标授权的验收，不是本阶段自动步骤。
 
 ## 增量与输入回归
 

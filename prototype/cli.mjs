@@ -11,10 +11,10 @@ import { buildArtifacts, writeArtifacts } from './pipeline.mjs';
 import { buildBusinessArtifacts } from './business/build.mjs';
 
 export async function main(args = process.argv.slice(2)) {
-  const { values } = parseArgs({ args, strict: true, options: { input: { type: 'string' }, project: { type: 'string' }, captures: { type: 'string' }, out: { type: 'string' }, id: { type: 'string' }, name: { type: 'string' }, base: { type: 'string' }, edited: { type: 'string' }, resolutions: { type: 'string' }, 'business-suite': { type: 'boolean' }, app: { type: 'string' }, locale: { type: 'string' }, device: { type: 'string' }, 'all-design-locales': { type: 'boolean' }, help: { type: 'boolean' } } });
-  if (values.help) { console.log('Usage: npm run prototype -- --input requirements.md --out prototype-output/new [--id project-id]\nOr --project path/to/react-project [--captures snapshots.json]. Inputs: .md, .txt, .html, .docx, PrototypeSpec .json. Incremental: --base previous/generated.json --edited edited-prototype.json [--resolutions choices.json]. Business suite: npm run prototype:business -- --out prototype-output/business [--app workflow|cs-admin|cs-h5] [--device desktop|mobile] [--locale zh_cn] [--all-design-locales]. HTML includes all apps and languages; design selection controls native design files. Business output contains no Markdown or ZIP. Existing output directories are never overwritten.'); return; }
+  const { values } = parseArgs({ args, strict: true, options: { input: { type: 'string' }, project: { type: 'string' }, captures: { type: 'string' }, out: { type: 'string' }, id: { type: 'string' }, name: { type: 'string' }, base: { type: 'string' }, edited: { type: 'string' }, resolutions: { type: 'string' }, packages: { type: 'boolean' }, 'plan-only': { type: 'boolean' }, 'catalog-decisions': { type: 'string' }, 'business-suite': { type: 'boolean' }, app: { type: 'string' }, locale: { type: 'string' }, device: { type: 'string' }, 'all-design-locales': { type: 'boolean' }, help: { type: 'boolean' } } });
+  if (values.help) { console.log('Usage: npm run prototype -- --input requirements.md --out prototype-output/new [--id project-id]\nOr --project path/to/react-project [--captures snapshots.json]. Inputs: .md, .txt, .html, .docx, PrototypeSpec .json. Incremental: --base previous/generated.json --edited edited-prototype.json [--resolutions choices.json]. Prototype 1.1: --packages for closed-flow ZIP packages, or --plan-only for unresolved catalog/budget output; optional --catalog-decisions exclusions.json.\nBusiness suite: npm run prototype:business -- --out prototype-output/business [--app workflow|cs-admin|cs-h5] [--device desktop|mobile] [--locale zh_cn] [--all-design-locales]. HTML always includes all apps and languages; design selection controls the native design files. Business output contains no Markdown or ZIP. Existing output directories are never overwritten.'); return; }
   if (values['business-suite']) {
-    if (!values.out || ['input', 'project', 'captures', 'base', 'edited', 'resolutions', 'id', 'name'].some(key => values[key])) throw new Error('--business-suite requires --out and cannot combine with generic inputs or merge options');
+    if (!values.out || ['input', 'project', 'captures', 'base', 'edited', 'resolutions', 'id', 'name', 'packages', 'plan-only', 'catalog-decisions'].some(key => values[key])) throw new Error('--business-suite requires --out and cannot combine with generic inputs or merge options');
     const artifacts = buildBusinessArtifacts({ app: values.app, locale: values.locale, device: values.device, allDesignLocales: values['all-design-locales'] });
     const output = await writeArtifacts(artifacts, values.out);
     console.log(JSON.stringify({ output, ...artifacts.counts, status: artifacts.status }, null, 2));
@@ -25,6 +25,8 @@ export async function main(args = process.argv.slice(2)) {
   let model;
   if (values.project) model = await parseReactProject(values.project, { id: values.id, name: values.name });
   else model = await loadDocument(values.input, { id: values.id, name: values.name });
+  if ((values.packages || values['plan-only'] || values['catalog-decisions']) && model.schemaVersion !== '1.1') throw new Error('Package and catalog options require PrototypeSpec 1.1');
+  if (values.packages && values['plan-only']) throw new Error('Choose --packages or --plan-only');
   let captures;
   if (values.captures) {
     if ((await stat(values.captures)).size > 6 * 1024 * 1024) throw new Error('Capture attachment exceeds 6 MiB');
@@ -52,8 +54,10 @@ export async function main(args = process.argv.slice(2)) {
     }
     model = merge.model;
   }
-  const artifacts = buildArtifacts(model, { captures, generated, previous, merge }); const output = await writeArtifacts(artifacts, values.out);
+  const catalogDecisions = values['catalog-decisions'] ? await readJSON(values['catalog-decisions']) : undefined;
+  const artifacts = await buildArtifacts(model, { captures, generated, previous, merge, packageOutput: values.packages, planOnly: values['plan-only'], catalogDecisions, ...(values.input ? { inputRoot: path.dirname(path.resolve(values.input)) } : {}) }); const output = await writeArtifacts(artifacts, values.out);
   console.log(JSON.stringify({ output, revision: artifacts.manifest.revision, status: artifacts.coverage.status, counts: artifacts.coverage.counts }, null, 2));
+  if (artifacts.manifest.packages?.some(p => p.status === 'BLOCKED') || artifacts.files.get('output-packages.json') && JSON.parse(artifacts.files.get('output-packages.json')).status === 'BLOCKED') process.exitCode = 2;
   return artifacts;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main().catch(error => { console.error(error.message); process.exitCode = 1; });

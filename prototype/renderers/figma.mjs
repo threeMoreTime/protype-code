@@ -1,11 +1,13 @@
-import { digest, validatePrototype } from '../core/model.mjs';
+import { digest, validatePrototype, assertPrototypePhase } from '../core/model.mjs';
+import { renderPresentationFigma } from './presentation-figma.mjs';
 import { validateDesignSpec } from '../../.research/local-figma-bridge-poc/design/spec.mjs';
 
 const fill = hex => [{ type: 'SOLID', color: { r: parseInt(hex.slice(1, 3), 16) / 255, g: parseInt(hex.slice(3, 5), 16) / 255, b: parseInt(hex.slice(5, 7), 16) / 255 } }];
 export const frameKey = (pageId, stateId) => `${pageId}/${stateId}`;
 
 /** Compile semantic pages into editable native primitives and explicit reactions. */
-export function renderFigma(input) {
+export function renderFigma(input, options = {}) {
+  if (input && typeof input === 'object' && Object.getOwnPropertyDescriptor(input, 'schemaVersion')?.value === '1.1') return renderPresentationFigma(input, options);
   const model = validatePrototype(input), revision = digest(model), nodes = [], reactions = [];
   const font = { family: model.theme.fontFamily, style: 'Regular' };
   const add = (key, type, parentKey, x, y, width, height, props = {}, name = key) => {
