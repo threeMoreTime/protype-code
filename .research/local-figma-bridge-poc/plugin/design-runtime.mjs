@@ -576,8 +576,16 @@ export function createDesignRuntime(figma, guards) {
     });
   }
   function singleFlowAppend(before, after, topKey) {
+    const names = new Set(before.map(flow => flow.name));
+    let firstUnused = 1;
+    while (names.has(`Flow ${firstUnused}`)) firstUnused += 1;
+    const appended = after[after.length - 1];
+    // Native hosts use either the page count or the first unused automatic
+    // name. A pre-existing custom flow does not necessarily consume Flow 1.
+    const nativeName = appended && !names.has(appended.name) &&
+      (appended.name === `Flow ${before.length + 1}` || appended.name === `Flow ${firstUnused}`);
     return after.length === before.length + 1 && canonical(after.slice(0, -1)) === canonical(before) &&
-      after[after.length - 1].name === `Flow ${before.length + 1}` && after[after.length - 1].nodeKey === topKey &&
+      nativeName && appended.nodeKey === topKey &&
       !before.some(flow => flow.nodeKey === topKey);
   }
   function nativeObservationEntries(ctx) {
@@ -784,9 +792,23 @@ export function createDesignRuntime(figma, guards) {
         typeof a.reactionSnapshotSignature === 'string' && /^[a-f0-9]{64}$/.test(a.reactionSnapshotSignature),
       'DESIGN_NATIVE_FLOW_ADOPTION_INVALID');
       const node = ctx.map.get(pending.key), def = ctx.definitions.get(pending.key);
-      ensure(node && def && ctx.state.nativeFlowObservation, 'DESIGN_NATIVE_FLOW_ADOPTION_INVALID');
+      ensure(node && def, 'DESIGN_NATIVE_FLOW_ADOPTION_INVALID');
       const raw = checkNode(ctx, def, node); checkReadback(ctx, def, node, raw);
       const after = copy(ctx.scope.page.flowStartingPoints ?? []), beforeSnapshot = recordedFullFlows(ctx, pending.flowBefore);
+      if (!ctx.state.nativeFlowObservation) {
+        // First-transition recovery has no prior chain to corroborate it. Only
+        // accept a complete successful setter readback, never a legacy intent
+        // alone, and bind every receipt field to the current owned source.
+        const receipt = pending.reactionReadback, top = reactionTopFrame(ctx, node);
+        ensure(beforeSnapshot.every(flow => flow.nodeKey === null) && receipt?.version === 1 &&
+          receipt.sourceKey === pending.key && receipt.sourceId === node.id && top &&
+          receipt.topLevelKey === ctx.idToKey.get(top.id) && receipt.operationId === pending.operationId &&
+          receipt.digest === reactionDigest(ctx, node) && typeof receipt.observedAt === 'string' &&
+          Number.isFinite(Date.parse(receipt.observedAt)) &&
+          canonical(recordedFullFlows(ctx, pending.flowAfter)) === canonical(fullFlowSnapshot(ctx, after)),
+        'DESIGN_NATIVE_FLOW_ADOPTION_INVALID');
+        guards.assertTaskOwned(top, ctx.ownership);
+      }
       const before = beforeSnapshot.map(flow => ({ name: flow.name, nodeId: flow.nodeKey === null ? flow.nodeId : ctx.map.get(flow.nodeKey).id }));
       ensure(canonical(normalizedReactions(node)) === canonical(nativeReactions(ctx, def)) &&
         designSignature(fullFlowSnapshot(ctx, after)) === a.flowSnapshotSignature && reactionDigest(ctx, node) === a.reactionSnapshotSignature,
