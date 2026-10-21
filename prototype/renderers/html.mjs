@@ -70,7 +70,8 @@ const css = `*{box-sizing:border-box}body{margin:0;background:#eef2f8;color:#182
 export function renderHTML(input) {
   const model = validatePrototype(input);
   const data = JSON.stringify(model).replace(/[<>&\u2028\u2029]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
-  const script = `(${startPrototype.toString()})(JSON.parse(document.getElementById('prototype-data').textContent));`;
+  // HTML parsing normalizes source newlines before CSP hashes are checked.
+  const script = `(${startPrototype.toString()})(JSON.parse(document.getElementById('prototype-data').textContent));`.replace(/\r\n?/g, '\n');
   const hash = createHash('sha256').update(script).digest('base64');
   return `<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"><title>${escape(model.name)}</title><style>:root{--primary:${model.theme.primary}}${css}</style></head><body><div id="app"></div><noscript>此交互原型需要 JavaScript。</noscript><script type="application/json" id="prototype-data">${data}</script><script>${script}</script></body></html>\n`;
 }
