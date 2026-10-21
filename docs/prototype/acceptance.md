@@ -70,6 +70,18 @@ npm run check:bundle
 
 报告需区分 SOURCE / MODEL / LOCAL TEST / BROWSER / FIGMA AUDIT / FIGMA PRESENT / ROUND-TRIP。Task 3 的字体、mask、跨范围 master 与完整视觉输入门禁保持有效；Task 5 的结构/预算/增量测试不解除它。真实 Figma 写入、Present、导出和独立回导属于后续经具体目标授权的验收，不是本阶段自动步骤。
 
+## Task 6：真实源稿验收状态（2026-10-20）
+
+本轮未通过原生验收。已完成工作区保护、当前源包检查、本地 doctor/bundle、桥接端口与桌面入口预检；详细状态见[真实 Figma 验收](native-acceptance.md)。不沿用历史 admin 或合成样例的原生结果。
+
+SOURCE 与 MODEL：58 个源 screen 仍 UNRESOLVED，现有 4 场景是 PLAN_ONLY，未生成源稿 HTML/DesignSpec；实际生成入口按预期停在 `PRESENTATION_VISUAL_NOT_VERIFIED`。缺少完整视觉输入的问题归 Task 3。当前精确检查原 Downloads `.fig` 路径为 NOT FOUND；旧 sourceHash 只用于历史关联，不是当前源文件重新取样的证明。
+
+FIGMA AUDIT、FIGMA PRESENT 和 ROUND-TRIP：NOT RUN。Figma 进程和窗口标题存在，但 Computer Use 内核资源初始化失败，重置后仍失败；本地桥接端口无监听。当前实际身份、Page/root、已有归属、插件加载版本、字体/图片、scope/有效期及 native checkpoint 均未回读。没有执行 plan/apply、原生 audit/PNG、手改文字/实例覆盖、Present、保存 `.fig` 或独立回导。本轮不因用户此前已导入原稿而计为生成器验收。
+
+BROWSER：file 10/10、127.0.0.1 HTTP 10/10 PASS，分别记录实际路径操作、历史、组件状态、长页/fixed、窗口和受限剪贴板，保存 16 张合成截图。剪贴板为隔离 Chromium 的真实权限拒绝及原生 `NotAllowedError`，没有 API stub；应用观察范围内没有外部请求，不扩大为全电脑网络隔离证明。结果只支持 SYNTHETIC_FIXTURE。源稿可操作路径、源稿视觉比较和人工差异仍 NOT RUN / NOT MEASURED。本轮不默认修改产品、桥接或插件源码；发现的阻断按负责阶段登记，不能通过合成输入解除源视觉门禁。
+
+本轮本地证据在 `.local/reports/study-platform-phase6-20261020/`。报告必须分别列 SOURCE、MODEL、LOCAL TEST、BROWSER（file/http）、FIGMA AUDIT、FIGMA PRESENT、ROUND-TRIP；未运行项不能计 PASS。摘要 ZIP 收集白名单结果及必要合成截图，排除会话、授权、账号和秘密数据，并记录每项 SHA-256、bytes 和 ZIP 内容复读结果。
+
 ## 增量与输入回归
 
 单条文案需求变化只改变关联页面分片和对应节点，其他页面字节、摘要和节点定义保持一致。自动合并保留人工修改的不同属性；同属性、删除/编辑和竞争排序先报告冲突。CLI 冲突退出 2，不生成 index.html/design-spec.json；选择 edited/generated 后可完成交付。最新生成基线与合并后的人工版本分别保留。
