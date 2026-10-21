@@ -1,8 +1,21 @@
 {
   "name": "protype-code",
   "version": "0.1.0",
-  "private": true,
+  "description": "Deterministic prototyping engine: compile PRD & React source projects into editable HTML prototypes and Figma DesignSpecs.",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/threeMoreTime/protype-code.git"
+  },
+  "keywords": [
+    "prototyping",
+    "prd-to-code",
+    "spec-generation",
+    "figma-designspec",
+    "react",
+    "offline-html"
+  ],
   "engines": {
     "node": ">=22.18"
   },

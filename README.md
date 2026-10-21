@@ -1,8 +1,32 @@
 # protype-code
 
+[![CI](https://github.com/threeMoreTime/protype-code/actions/workflows/prototype.yml/badge.svg?branch=dev)](https://github.com/threeMoreTime/protype-code/actions/workflows/prototype.yml)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.18-brightgreen.svg)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> **English Overview**: `protype-code` is a deterministic prototyping engine that turns PRD documents (Markdown, DOCX, UTF-8 text, HTML) or existing React source projects into interactive offline HTML prototypes, structured `PrototypeSpec` definitions with stable IDs, and Figma-compatible DesignSpecs.
+
 根据 **PRD 文件或现有 React 项目**生成可编辑的原型定义、离线 HTML，以及现有 Figma 引擎可消费的 DesignSpec。生成过程保留需求来源、状态、交互和缺失信息，支持基于稳定 ID 的增量比较与人工编辑冲突处理。
 
 产品层位于 [prototype](prototype/)，Figma 桥接保留在 [.research/local-figma-bridge-poc](.research/local-figma-bridge-poc/) 以兼容历史任务。ArchiveLens 仅作为旧采集适配器存在；新增项目不需要修改核心代码。
+
+---
+
+## 架构流程 (Architecture)
+
+```mermaid
+flowchart LR
+    A["PRD (.md / .docx / .html)"] --> P["Parser & Extractor"]
+    B["React Project (JSX / TSX)"] --> P
+    
+    P --> C["Core Engine\n(Stable IDs / Spec Diff / Coverage)"]
+    
+    C --> O1["Interactive Offline HTML\n(index.html)"]
+    C --> O2["PrototypeSpec JSON\n(Baseline & Traceability)"]
+    C --> O3["Figma DesignSpec\n(design-spec.json)"]
+```
+
+---
 
 ## 快速开始
 
