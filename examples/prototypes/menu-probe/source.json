@@ -1,0 +1,24 @@
+{
+  "notice": "合成隐私测试数据，不是真实客户信息",
+  "groups": [
+    { "id": "SOURCE-GROUP-CANARY-001", "name": "CANARY-PRIVATE-GROUP" }
+  ],
+  "replies": [
+    {
+      "id": "SOURCE-REPLY-CANARY-001",
+      "groupId": "SOURCE-GROUP-CANARY-001",
+      "name": "CANARY-PRIVATE-NAME",
+      "content": "CANARY-PRIVATE-CONTENT synthetic-person@example.invalid",
+      "pinned": true,
+      "translations": { "en": { "content": "CANARY-PRIVATE-TRANSLATION" } },
+      "authorization": "CANARY-SYNTHETIC-NOT-A-CREDENTIAL"
+    },
+    {
+      "id": "SOURCE-REPLY-CANARY-002",
+      "groupId": "SOURCE-GROUP-CANARY-001",
+      "name": "CANARY-PRIVATE-NAME-2",
+      "content": "CANARY-PRIVATE-CONTENT-2",
+      "pinned": false
+    }
+  ]
+}

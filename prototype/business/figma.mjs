@@ -293,10 +293,11 @@ export function renderBusinessFigma({ catalog, seed, locales, messages }, option
     }
     button(`${screen.key}/back`, screen.key, 'ui.back', screen.x, y, 180, backKey);
   }
-  function formContent(screen, module, operation, record, contextRecord, backKey) {
+  function formContent(screen, module, operation, record, contextRecord, backKey, scenario = {}) {
     const formKey = `${screen.key}/form`, form = box(formKey, screen.key, screen.x, screen.y, screen.width, 100, colors.surface, true);
     const formFields = actionFields(module, operation), collection = operation.collection || module.collection;
     let y = 22;
+    if (scenario.caption) y += text(`${formKey}/scenario`, formKey, scenario.caption, 18, y, screen.width - 36, 12, colors.muted) + 16;
     if (contextRecord?.id) {
       y += text(`${formKey}/record-id`, formKey, contextRecord.id, 18, y, screen.width - 36, 13, colors.ink, { collection: module.collection, recordId: contextRecord.id, field: 'id' }) + 12;
       if (contextRecord.status) {
@@ -310,6 +311,7 @@ export function renderBusinessFigma({ catalog, seed, locales, messages }, option
       if (descriptor.required) y += label(`${fieldKey}/required`, formKey, 'ui.required', 18, y, screen.width - 36, 10, colors.danger) + 4;
       let value = rowLabel(record, descriptor.key, collection);
       if (descriptor.options?.length && (record?.[descriptor.key] === undefined || record?.[descriptor.key] === null)) value = { value: t(descriptor.options[0].labelKey), mapping: { key: descriptor.options[0].labelKey } };
+      if (descriptor.key === scenario.missingField) value = { value: '', mapping: {} };
       const maxCharacters = descriptor.type === 'json' ? (mobile ? 140 : 350) : descriptor.type === 'textarea' ? (mobile ? 120 : 240) : 120;
       const display = value.value.length > maxCharacters ? `${value.value.slice(0, maxCharacters - 1)}…` : value.value;
       const controlHeight = Math.max(descriptor.type === 'json' ? 148 : descriptor.type === 'textarea' ? 100 : 48, descriptor.type === 'image' ? 48 : textHeight(display, screen.width - 60, 12) + 24);
@@ -320,8 +322,12 @@ export function renderBusinessFigma({ catalog, seed, locales, messages }, option
         text(`${fieldKey}/value`, control.key, display, 12, 12, control.width - 24, 12, colors.ink, value.mapping);
       }
       y += controlHeight + 22;
+      if (descriptor.key === scenario.errorField) {
+        control.props.strokes = paint(colors.danger);
+        y += label(`${fieldKey}/error`, formKey, 'ui.required', 18, y - 14, screen.width - 36, 12, colors.danger) + 8;
+      }
     }
-    const submitHeight = button(`${formKey}/submit`, formKey, operation.labelKey, 18, y, Math.min(screen.width - 36, 240), rootKey(module, 'success'), true);
+    const submitHeight = button(`${formKey}/submit`, formKey, scenario.submitLabelKey || operation.labelKey, 18, y, Math.min(screen.width - 36, 240), scenario.submitTarget || rootKey(module, 'success'), true);
     y += submitHeight + 12;
     y += button(`${formKey}/cancel`, formKey, 'ui.cancel', 18, y, Math.min(screen.width - 36, 180), backKey) + 22;
     form.height = y;
@@ -398,6 +404,20 @@ export function renderBusinessFigma({ catalog, seed, locales, messages }, option
     for (const context of formRequests.values()) if (context.module === module) {
       const screen = newScreen(module, context.state);
       formContent(screen, module, context.operation, context.record, context.contextRecord, context.backKey);
+      const required = options.validationScenarios === true && actionFields(module, context.operation).find(field => field.required);
+      if (required) {
+        // These are named demonstration states, not Figma input validation or business mutations.
+        const missing = newScreen(module, `${context.state}-missing-required`);
+        const error = newScreen(module, `${context.state}-required-error`);
+        formContent(missing, module, context.operation, context.record, context.contextRecord, context.backKey, {
+          missingField: required.key, submitTarget: error.key, caption: '必填校验示意 · 缺少必填输入（静态示例）'
+        });
+        formContent(error, module, context.operation, context.record, context.contextRecord, screen.key, {
+          missingField: required.key, errorField: required.key, submitTarget: screen.key, submitLabelKey: 'ui.back',
+          caption: '必填校验示意 · 返回已填表示例（不执行数据写入）'
+        });
+        flows.push({ nodeKey: missing.key, name: `${t(module.titleKey)} · ${t(context.operation.labelKey)} · 必填校验示意` });
+      }
     }
     flows.push({ nodeKey: rootKey(module, 'list'), name: t(module.titleKey) });
   }
