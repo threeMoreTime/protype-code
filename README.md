@@ -57,6 +57,7 @@ npm run prototype -- --project examples/prototypes/content --id content-demo --o
 
 - [PRD 格式与 Figma 交付](docs/prototype/prd-format.md)
 - [React 与运行采集](docs/prototype/project-input.md)
+- [复用原组件的 PC 反馈列表原型](docs/prototype/feedback-fidelity.md)
 - [单菜单隐私 mock 与双输出验证](docs/prototype/menu-probe.md)
 - [HTML、文档格式与增量更新](docs/prototype/incremental.md)
 - [架构和模块边界](docs/prototype/architecture.md)
