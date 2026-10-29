@@ -12,13 +12,15 @@ const fieldNames = ['geometry', 'vectorPaths', 'text', 'paints', 'mask', 'layout
 const fixedProofSchema = z.object({ parentId: nativeId.nullable(), parentType: z.string().min(1).max(100).nullable(),
   childIndex: z.number().int().min(0).max(24999).nullable(), childCount: z.number().int().min(0).max(25000).nullable(), numberOfFixedChildren: z.number().int().min(0).max(25000).nullable(),
   reason: z.enum(['PARENT_HAS_NO_FIXED_CHILDREN', 'PARENT_SCOPE_REQUIRED', 'INVALID_FIXED_CHILDREN', 'HOST_API_UNAVAILABLE']).optional() }).strict();
-const fieldSchema = z.object({ value: z.unknown(), complete: z.literal(true), status: z.literal('VERIFIED'), sha256: hash,
+// Preserve the legacy FIELD_HASH rejection after structural validation, including missing values.
+const fieldSchema = z.object({ value: z.unknown().optional(), complete: z.literal(true), status: z.literal('VERIFIED'), sha256: hash,
   propertyStatus: z.record(z.string()).optional(), snapshotHash: hash.optional(),
   derivations: z.object({ isFixed: fixedProofSchema }).strict().optional(),
   pagination: z.object({ offset: z.literal(0), limit: z.number().int().min(1).max(1000), total: z.number().int().min(0).max(25000), nextOffset: z.null() }).strict().optional() }).strict();
 const capsuleSchema = z.object({ schemaVersion: z.literal('1.0'), source: z.literal('PluginAPI'), readVersion: z.literal('scope-evidence-1.0'),
   fileIdentity: z.string().min(1).max(512), nodeId: nativeId, pageId: rootId, readScope: scope, complete: z.literal(true), scopeVerification: z.literal('VERIFIED'),
-  writes: z.literal(0), fields: z.record(z.enum(fieldNames), fieldSchema), sha256: hash }).strict();
+  // Each capsule contains only the requested fields; unknown field names remain invalid.
+  writes: z.literal(0), fields: z.partialRecord(z.enum(fieldNames), fieldSchema), sha256: hash }).strict();
 const optionsSchema = z.object({ fileIdentity: z.string().min(1).max(512),
   bindings: z.array(z.object({ viewNodeId: designEvidenceId, sourceNodeId: designEvidenceId, nativeNodeId: nativeId, readScope: scope,
     readbackHashes: z.array(hash).min(1).max(8).refine(value => new Set(value).size === value.length) }).strict()).min(1).max(25000),

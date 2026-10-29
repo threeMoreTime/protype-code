@@ -155,7 +155,7 @@ export async function createMcpServer({ port = configuredPort(), stderr = proces
           nodeKeys: z.array(z.string()).min(1).max(20),
           planSignature: z.string().regex(/^[a-f0-9]{64}$/).optional(),
         }).strict().optional() } : {}),
-        batchSize: z.number().int().min(1).max(500).optional(),
+        batchSize: z.number().int().min(1).max(500, 'Number must be less than or equal to 500').optional(),
         timerUnit: z.enum(['seconds', 'milliseconds']).optional(),
         allowGlobalResources: z.boolean().optional(), reconcile: z.boolean().optional(),
         ...(!textRevision ? { adoptNativeFlow: z.object({
