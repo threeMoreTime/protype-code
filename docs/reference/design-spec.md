@@ -75,7 +75,14 @@ schema 上限：25,000 节点、30,000 反应、2,000 图像、每图像约 20 M
 
 context内部最多16路只读节点ID预取不改变上述请求/批预算；节点guard、fallback、母版核对及全部setter保持顺序，属性快照仍在核对时新鲜读取。该实现纳入229项契约验证并已执行一个实际500后处理批次；首批约126.6秒，暂无明确提速证据，云同步仍未验证。详见[实机边界](../verification/2026-10-08-design-pipeline.md#只读节点预取与后续确认检查点)。
 
-请求键限定为 spec、runId、batchSize、timerUnit、allowGlobalResources、reconcile、adoptNativeFlow，export 专用 nodeKey/scale，audit 专用 auditOffset/auditLimit，再加授权字段。没有 arbitrary-code、任意文件路径或远程资源执行入口。
+请求字段由 [`design/commands.mjs`](../../.research/local-figma-bridge-poc/design/commands.mjs) 按命令校验。除 spec、runId 与授权字段外，普通设计请求还使用 batchSize、timerUnit、allowGlobalResources、reconcile、adoptNativeFlow；字段的允许范围和组合仍以对应命令校验为准，不能把所有字段发送给每个命令。专用字段包括：
+
+- `scope_design_plan` / `scope_design_apply` 可携带 `positionRecovery`，仅适用于 DesignSpec 1.0；apply 还要求 `reconcile: true` 和已核对的 planSignature，详见[生成阶段的位置恢复](../prototype/incremental.md#10-生成阶段的位置恢复)。
+- `scope_design_text_plan` / `scope_design_text_apply` 要求 `baseSpec`，详见[原生文字修订边界](../prototype/incremental.md#原生文字修订边界)。
+- `scope_design_export_png` 使用 `nodeKey` / `scale`；`scope_design_audit` 使用 `auditOffset` / `auditLimit`。
+- 资产分段命令使用独立字段集合：`scope_design_asset_stage` 携带 `assetKey`、`offset`、`dataBase64`、`chunkSha256`，`scope_design_asset_commit` 携带 `assetKey`，详见[分段传输](../prototype/presentation-preview.md#分段传输)。
+
+没有 arbitrary-code、任意文件路径或远程资源执行入口。
 
 公共归一化、MCP schema及CLI已支持精确采用，并纳入226项完整契约验证；普通v2路径在独立6节点小例通过，主运行的明确授权采用已执行并独立回读，但不证明旧setter来源或完整交付。普通reconcile要求持久成功回读；可选 `adoptNativeFlow` 仅供 `scope_design_apply` 且 `reconcile: true` 使用，是严格对象，恰含以下三个字段：
 
@@ -91,7 +98,7 @@ context内部最多16路只读节点ID预取不改变上述请求/批预算；�
 
 旧v5主55实例的精确采用仍为 `VERIFIED_ONLY_EXACT_CURRENT_STATE_NOT_ORIGIN`，legacyPending身份及原setter来源边界保留。节点阶段已COMPLETE，七页最终原文件只读审计PASS，确认13,193节点、739反应和2个起点。12/12代表PNG已完成视觉复核，结果FAIL，不能以结构恒等覆盖可读性问题；真实完整结构 `.fig` 已保存且容器检查PASS，但独立回导、完整Present及交付验收仍NOT_RUN。新转换选项和字体小例尚未证明全55画面修复；旧op-8b来源仍OUTCOME_UNKNOWN。详见[实机采用证据](../verification/2026-10-08-design-pipeline.md#精确当前状态采用的实机确认)、[全部节点与最终审计记录](../verification/2026-10-08-design-pipeline.md#2026-10-10-全部节点完成与最终原文件审计)及[完整视觉与备份记录](../verification/2026-10-08-design-pipeline.md#2026-10-10-12-图视觉复核与完整结构备份)。
 
-当前v10候选保留历史55场景两尺寸、13,197节点、739反应及2起点，并包含418项实测字号适配及28项固定来源文字宽度修正。五场景1462节点生成、结构审计和PNG导出PASS；本批已报告的裁切、断行和工具栏遮挡修复验收PASS，接受已批准的字体差异。全55原生生成、交互和独立回导仍 `NOT_RUN`，不由局部探针推断成功。v9失败记录保留，见[五场景修复验收](../verification/2026-10-08-design-pipeline.md#2026-10-11-v10-五场景修复验收)。固定来源宽度派生不改变通用字号适配API的几何保护。
+2026-10-12 的 v10 历史记录覆盖55场景两尺寸、13,197节点、739反应及2起点，并包含418项实测字号适配及28项固定来源文字宽度修正。记录中的全量节点创建与收尾、原文件完整只读结构审计、场景PNG来源核验及真实 `.fig` 保存和容器检查为PASS；五场景已报告的裁切、断行和工具栏遮挡缺陷复验PASS，接受已批准的字体差异。其余场景复核发现缺陷，全量历史视觉为FAIL；实际Present/计时/滚动、独立回导和最终交付仍为NOT_RUN。详见[生成指南中的验收边界](../guide/generation.md)及[最新视觉复核记录](../verification/2026-10-08-design-pipeline.md#2026-10-12-其余-50-场景视觉复核)。v9及v10失败记录保留；本次文档同步未复验真实宿主或私有证据。固定来源宽度派生不改变通用字号适配API的几何保护。
 
 ## 审计分页
 

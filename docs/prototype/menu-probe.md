@@ -54,13 +54,22 @@ Figma 的 `validationScenarios: true` 为有必填字段的表单新增独立的
 
 ## 验证命令与证据边界
 
+以下现有检查在仓库根目录执行；浏览器检查需先按 [README](../../README.md#文档与验证) 准备 Chromium：
+
 ```powershell
-node --test tests/prototype/mock-menu.test.mjs tests/prototype/menu-probe.test.mjs tests/prototype/business-figma.test.mjs
-node --test --test-concurrency=1 tests/prototype/browser/menu-probe.test.mjs
 npm run test:prototype
 npm run test:browser
 npm run check:bundle
 ```
+
+下面的专项命令依赖未随仓库提交的本地测试文件。当前检出不包含这些文件，不能直接复现；只有另备对应文件后才可运行：
+
+```powershell
+node --test tests/prototype/mock-menu.test.mjs tests/prototype/menu-probe.test.mjs tests/prototype/business-figma.test.mjs
+node --test --test-concurrency=1 tests/prototype/browser/menu-probe.test.mjs
+```
+
+通用测试只覆盖当前检出中存在的用例，通过不表示已执行上述专项测试。后文的 2026-10-26 记录是当时的本地验证快照，不代表当前检出可复现同样覆盖。
 
 测试明确区分纯数据/结构校验、真实 Chromium 行为和 Figma API double。生成器不会自动把测试状态标为 PASS；报告中的 browser、realFigma、visualComparison 保持 NOT RUN，实际测试结果由当次执行日志提供。
 

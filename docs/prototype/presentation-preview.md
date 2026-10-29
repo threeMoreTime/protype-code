@@ -20,7 +20,13 @@ npm run prototype -- --input <受控目录中的1.1.json> --out <新的输出目
 
 ## 原生读取
 
-使用现有 `scripts/workflow.mjs session <read-session.json>`。读取配置只需 fileIdentity 和本地 outDir，不需要 design grant。插件连接后先 status，确认文件名、稳定 fileIdentity、认证和当前页面。
+在仓库根目录启动现有桥接会话：
+
+```powershell
+node .research/local-figma-bridge-poc/scripts/workflow.mjs session '.local/read-session.json'
+```
+
+将 `.local/read-session.json` 替换为已准备的读取配置路径；插件安装、配对与配置方式见[启动与配对](../guide/getting-started.md)。读取配置只需 fileIdentity 和本地 outDir，不需要 design grant。插件连接后先 status，确认文件名、稳定 fileIdentity、认证和当前页面。
 
 `read-node` 可携带显式 evidence.fields 与 readScope，以及受限 children/text 分页参数。root 必须属于声明页面，不能读入未授权的其他文件/页面或自动跟随跨范围 master。原生 ID 与离线源 ID 不一致时，必须先明确映射。字段、完整源快照和整包哈希应独立重算；分页未收齐或原生字段不可读时不能称完整输入。
 
