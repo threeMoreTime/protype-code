@@ -1,14 +1,32 @@
-## Summary
-<!-- Describe the purpose and behavior of this pull request -->
+<!-- PR 标题使用 <type>: 中文说明；描述使用中文，规则见 docs/commit-conventions.md。 -->
 
-## Key Changes
-<!-- List the main changes in logic, spec, or renderers -->
+## 改动说明
 
-## Checklist
-- [ ] Code follows formatting conventions in `AGENTS.md` (ESM, 2-space indent, explicit `.mjs` extensions)
-- [ ] Commit message follows `docs/commit-conventions.md` format (`<type>(<scope>): <subject>`)
-- [ ] Added or updated test cases under `tests/prototype/`
-- [ ] Ran `npm test` and all suites pass
-- [ ] Ran `npm run acceptance`
-- [ ] Ran `npm run check:bundle` (if Figma plugin runtime affected)
-- [ ] No private credentials, test screenshots, or `prototype-output/` included
+<!-- 说明解决的问题与最终行为；涉及可见界面变化时附截图。 -->
+
+## 主要改动
+
+<!-- 每项只描述一个明确改动。 -->
+
+## 验证结果
+
+<!-- 列出实际执行的命令及 PASS / FAIL / NOT RUN；未完成的验证说明原因，不编造结果。 -->
+
+## 风险与影响
+
+<!-- 说明兼容性及数据库、接口、配置或依赖影响；没有明显风险时填写“未发现明显风险”。 -->
+
+## 关联信息
+
+<!-- 填写关联 Issue、任务或需求编号；没有关联内容时填写“无”。 -->
+
+## 检查清单
+
+- [ ] 代码遵循 `AGENTS.md` 约定（ESM、2 空格缩进、显式 `.mjs` 扩展名）
+- [ ] 普通提交遵循 `docs/commit-conventions.md` 的 `<type>(<scope>): 中文说明` 格式
+- [ ] PR 标题及压缩合并后的最终消息使用 `<type>: 中文说明`
+- [ ] 已补充或更新 `tests/prototype/` 下的相关测试；用户明确排除时，在验证结果中说明例外及证据局限
+- [ ] 已运行 `npm test` 且全部测试通过
+- [ ] 已运行 `npm run acceptance`
+- [ ] 涉及 Figma 插件运行时时，已运行 `npm run check:bundle`
+- [ ] 未包含私有凭据、测试截图或 `prototype-output/` 产物
